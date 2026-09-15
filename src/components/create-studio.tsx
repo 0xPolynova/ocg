@@ -2,11 +2,12 @@
 
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { AnimatePresence, motion } from "framer-motion";
 import { Info, Lock, Sparkles, Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { GameFrame } from "@/components/game-frame";
+import { RomCabinet } from "@/components/rom-cabinet";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { apiUrl } from "@/lib/api";
@@ -14,6 +15,13 @@ import { inscribeGame } from "@/lib/chain-store";
 import { MAX_GAME_BYTES } from "@/lib/constants";
 import { utf8Bytes } from "@/lib/game-codec";
 import { upsertLaunch } from "@/lib/launches-store";
+import {
+  formatTokenAmount,
+  PUMP_MAX_CURVE_PCT,
+  PUMP_MAX_SOL_BUY,
+  solForSupplyPct,
+  supplyPctForSol,
+} from "@/lib/pump-curve";
 import { createPumpToken, uploadPumpMetadata } from "@/lib/pump-launch";
 import type { GenerateGameResponse, OcgLaunch } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -32,23 +40,28 @@ export function CreateStudio() {
   const [game, setGame] = useState<GenerateGameResponse | null>(null);
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
+  const [description, setDescription] = useState("");
   const [image, setImage] = useState<File | null>(null);
+  const [twitter, setTwitter] = useState("");
+  const [telegram, setTelegram] = useState("");
+  const [website, setWebsite] = useState("");
+  const [mayhemMode, setMayhemMode] = useState(false);
   const [buyMode, setBuyMode] = useState<"pct" | "sol">("sol");
-  const [devBuy, setDevBuy] = useState(0);
+  const [solBuy, setSolBuy] = useState(0);
 
+  const generating = busy === "generate";
+  const showLaunch = Boolean(game) && !generating;
   const compressed = game?.compressedBytes ?? 0;
   const overLimit = compressed > MAX_GAME_BYTES;
-  const meter = Math.min(100, Math.round((compressed / MAX_GAME_BYTES) * 100));
-
-  const solBuy = useMemo(() => {
-    if (buyMode === "sol") return devBuy;
-    return Number((devBuy * 0.02).toFixed(3));
-  }, [buyMode, devBuy]);
+  const pct = useMemo(() => supplyPctForSol(solBuy), [solBuy]);
+  const sliderValue = buyMode === "sol" ? solBuy : pct;
+  const sliderMax = buyMode === "sol" ? PUMP_MAX_SOL_BUY : PUMP_MAX_CURVE_PCT;
+  const sliderStep = buyMode === "sol" ? 0.01 : 0.1;
 
   async function generate() {
     setBusy("generate");
     setError(null);
-        setStatus("Planning the mechanic, then coding the ROM…");
+    setStatus(null);
     try {
       const response = await fetch(apiUrl("/api/generate-game"), {
         method: "POST",
@@ -60,7 +73,9 @@ export function CreateStudio() {
       setGame(json);
       setName(json.name);
       setSymbol(json.symbol);
-      setStatus(json.fallback ? json.error ?? "Used a compact fallback ROM." : "Game compiled. Play it, then launch.");
+      setDescription(prompt.slice(0, 200));
+      if (!website && typeof window !== "undefined") setWebsite(window.location.origin);
+      setStatus(json.fallback ? json.error ?? "Used a compact fallback ROM." : "ROM ready. Play it, then launch.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Generation failed.";
       setError(
@@ -91,9 +106,11 @@ export function CreateStudio() {
       const uri = await uploadPumpMetadata({
         name,
         symbol,
-        description: `OCG · ${prompt.slice(0, 160)}`,
+        description: description || `OCG · ${prompt.slice(0, 160)}`,
         image,
-        website: typeof window !== "undefined" ? window.location.origin : "",
+        website,
+        twitter,
+        telegram,
       });
 
       setStatus("Creating Pump.fun token…");
@@ -104,6 +121,7 @@ export function CreateStudio() {
         symbol,
         uri,
         solBuy,
+        mayhemMode,
       });
 
       setStatus("Inscribing game on Solana…");
@@ -118,7 +136,7 @@ export function CreateStudio() {
         id: created.mint.toBase58(),
         name,
         symbol,
-        description: prompt,
+        description: description || prompt,
         prompt,
         genre: game.genre,
         gameHtml: game.html,
@@ -145,6 +163,11 @@ export function CreateStudio() {
     }
   }
 
+  function onBuySlider(value: number) {
+    if (buyMode === "sol") setSolBuy(value);
+    else setSolBuy(solForSupplyPct(value));
+  }
+
   return (
     <div className="flex min-h-full flex-col">
       <SiteHeader />
@@ -152,136 +175,198 @@ export function CreateStudio() {
         <div className="max-w-xl">
           <h1 className="text-3xl font-semibold tracking-tight">Create a game</h1>
           <p className="mt-2 text-muted-foreground">
-            Prompt a real micro-arcade: title screen, sprites that match the idea, juice, then a Pump.fun
-            token. ROMs stay under {MAX_GAME_BYTES.toLocaleString()} gzipped bytes so they fit on Solana.
+            Prompt a real micro-arcade. The ROM plays in the cabinet, then you launch the Pump.fun
+            coin underneath.
           </p>
         </div>
 
         <div className="mt-8 grid items-start gap-5 lg:grid-cols-[1.15fr_0.85fr]">
-          <section className="rounded-2xl border border-border bg-card p-5 md:p-6">
-            <Field label="Prompt">
-              <textarea
-                value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-                rows={4}
-                className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary/50"
-                placeholder="A microscopic snake game with neon walls"
-              />
-            </Field>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {PROMPTS.map((idea) => (
-                <button
-                  key={idea.label}
-                  type="button"
-                  onClick={() => setPrompt(idea.prompt)}
-                  className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:border-primary/40 hover:text-foreground"
+          <div className="space-y-5">
+            <section className="rounded-2xl border border-border bg-card p-5 md:p-6">
+              <Field label="Prompt">
+                <textarea
+                  value={prompt}
+                  onChange={(event) => setPrompt(event.target.value)}
+                  rows={4}
+                  className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary/50"
+                  placeholder="A microscopic snake game with neon walls"
+                />
+              </Field>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {PROMPTS.map((idea) => (
+                  <button
+                    key={idea.label}
+                    type="button"
+                    onClick={() => setPrompt(idea.prompt)}
+                    className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  >
+                    {idea.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void generate()}
+                disabled={busy !== null || prompt.trim().length < 3}
+                className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-secondary px-4 text-sm font-medium hover:bg-secondary/80 disabled:opacity-50"
+              >
+                <Wand2 className="size-4" />
+                {generating ? "Building ROM…" : game ? "Regenerate" : "Generate game"}
+              </button>
+            </section>
+
+            <RomCabinet game={game} generating={generating} title={name || "Preview"} />
+
+            <AnimatePresence>
+              {showLaunch ? (
+                <motion.section
+                  key="launch-form"
+                  initial={{ opacity: 0, y: 28 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 12 }}
+                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                  className="rounded-2xl border border-border bg-card p-5 md:p-6"
                 >
-                  {idea.label}
-                </button>
-              ))}
-            </div>
+                  <h2 className="text-sm font-medium">Launch coin</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Same fields as Pump.fun create — name, ticker, and image lock in at mint.
+                  </p>
 
-            <button
-              type="button"
-              onClick={() => void generate()}
-              disabled={busy !== null || prompt.trim().length < 3}
-              className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-secondary px-4 text-sm font-medium hover:bg-secondary/80 disabled:opacity-50"
-            >
-              <Wand2 className="size-4" />
-              {busy === "generate" ? "Building ROM…" : "Generate game"}
-            </button>
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <Field label="Token name">
+                      <input
+                        value={name}
+                        maxLength={32}
+                        onChange={(event) => setName(event.target.value)}
+                        className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary/50"
+                      />
+                    </Field>
+                    <Field label="Ticker">
+                      <input
+                        value={symbol}
+                        maxLength={10}
+                        onChange={(event) => setSymbol(event.target.value.toUpperCase())}
+                        className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary/50"
+                      />
+                    </Field>
+                  </div>
 
-            {game ? (
-              <div className="mt-6 space-y-5">
-                <div className="overflow-hidden rounded-xl border border-border">
-                  <div className="aspect-[16/10] bg-black">
-                    <GameFrame html={game.html} title={name || "Preview"} />
+                  <div className="mt-4">
+                    <Field label="Description">
+                      <textarea
+                        value={description}
+                        maxLength={200}
+                        onChange={(event) => setDescription(event.target.value)}
+                        rows={3}
+                        className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary/50"
+                      />
+                    </Field>
                   </div>
-                  <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2 text-xs">
-                    <span className="text-muted-foreground">
-                      {game.bytes} raw · {game.compressedBytes} gzipped · {game.mechanic ?? game.genre} ·{" "}
-                      {game.model}
-                    </span>
-                    <span className={overLimit ? "text-negative" : "text-positive"}>
-                      {meter}% of {MAX_GAME_BYTES} byte cap
-                    </span>
-                  </div>
-                  <div className="h-1 bg-muted">
-                    <div
-                      className={cn("h-full", overLimit ? "bg-negative" : "bg-positive")}
-                      style={{ width: `${meter}%` }}
-                    />
-                  </div>
-                </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Token name">
+                  <div className="mt-4">
+                    <Field label="Token image">
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/gif,image/webp"
+                        onChange={(event) => setImage(event.target.files?.[0] ?? null)}
+                        className="text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-foreground"
+                      />
+                    </Field>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Square PNG/JPG, ideally 1000×1000. Immutable after create.
+                    </p>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                    <Field label="Website">
+                      <input
+                        value={website}
+                        onChange={(event) => setWebsite(event.target.value)}
+                        placeholder="https://"
+                        className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary/50"
+                      />
+                    </Field>
+                    <Field label="X / Twitter">
+                      <input
+                        value={twitter}
+                        onChange={(event) => setTwitter(event.target.value)}
+                        placeholder="https://x.com/…"
+                        className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary/50"
+                      />
+                    </Field>
+                    <Field label="Telegram">
+                      <input
+                        value={telegram}
+                        onChange={(event) => setTelegram(event.target.value)}
+                        placeholder="https://t.me/…"
+                        className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary/50"
+                      />
+                    </Field>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Socials can only be set at creation on Pump.fun.
+                  </p>
+
+                  <label className="mt-5 flex items-start gap-3 rounded-xl border border-border bg-background/60 px-3 py-3">
                     <input
-                      value={name}
-                      maxLength={32}
-                      onChange={(event) => setName(event.target.value)}
-                      className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary/50"
+                      type="checkbox"
+                      checked={mayhemMode}
+                      onChange={(event) => setMayhemMode(event.target.checked)}
+                      className="mt-0.5"
                     />
-                  </Field>
-                  <Field label="Ticker">
+                    <span>
+                      <span className="block text-sm font-medium">Mayhem mode</span>
+                      <span className="text-xs text-muted-foreground">
+                        24h AI trading agent, only set at create. Can increase supply. Same starting
+                        market cap.
+                      </span>
+                    </span>
+                  </label>
+
+                  <div className="mt-5">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-sm font-medium">Dev buy</p>
+                      <div className="flex rounded-full border border-border p-0.5 text-xs">
+                        <Toggle active={buyMode === "sol"} onClick={() => setBuyMode("sol")}>
+                          SOL
+                        </Toggle>
+                        <Toggle active={buyMode === "pct"} onClick={() => setBuyMode("pct")}>
+                          % of supply
+                        </Toggle>
+                      </div>
+                    </div>
+                    <p className="mb-3 text-xs text-muted-foreground">
+                      Optional first buy on the bonding curve, bundled with create. Pump.fun prices
+                      this on the curve — 10% of supply is about {solForSupplyPct(10).toFixed(2)} SOL,
+                      not a flat split of 2 SOL.
+                    </p>
                     <input
-                      value={symbol}
-                      maxLength={10}
-                      onChange={(event) => setSymbol(event.target.value.toUpperCase())}
-                      className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary/50"
+                      className="ocg-slider"
+                      type="range"
+                      min={0}
+                      max={sliderMax}
+                      step={sliderStep}
+                      value={sliderValue}
+                      onChange={(event) => onBuySlider(Number(event.target.value))}
                     />
-                  </Field>
-                </div>
-
-                <Field label="Token image">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) => setImage(event.target.files?.[0] ?? null)}
-                    className="text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-foreground"
-                  />
-                </Field>
-
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-sm font-medium">Dev buy</p>
-                    <div className="flex rounded-full border border-border p-0.5 text-xs">
-                      <Toggle active={buyMode === "pct"} onClick={() => setBuyMode("pct")}>
-                        % of supply
-                      </Toggle>
-                      <Toggle active={buyMode === "sol"} onClick={() => setBuyMode("sol")}>
-                        SOL amount
-                      </Toggle>
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">0</span>
+                      <span className="font-medium text-foreground">
+                        {solBuy.toFixed(3)} SOL · {pct.toFixed(2)}% of 1B
+                        {solBuy > 0 ? ` · ~${formatTokenAmount(solBuy)} tokens` : ""}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {buyMode === "sol" ? `${PUMP_MAX_SOL_BUY} SOL` : `${PUMP_MAX_CURVE_PCT}%`}
+                      </span>
                     </div>
                   </div>
-                  <p className="mb-3 text-xs text-muted-foreground">
-                    Optional first buy, bundled with the Pump.fun create so nobody snipes the ROM.
-                  </p>
-                  <input
-                    className="ocg-slider"
-                    type="range"
-                    min={0}
-                    max={buyMode === "sol" ? 2 : 75}
-                    step={buyMode === "sol" ? 0.01 : 1}
-                    value={devBuy}
-                    onChange={(event) => setDevBuy(Number(event.target.value))}
-                  />
-                  <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                    <span>0</span>
-                    <span>
-                      {buyMode === "sol" ? `${solBuy.toFixed(2)} SOL` : `${devBuy}% ≈ ${solBuy.toFixed(3)} SOL`}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-6 rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">
-                Generate a ROM first. One mechanic, a character you can recognize, instant restart.
-              </div>
-            )}
-          </section>
+                </motion.section>
+              ) : null}
+            </AnimatePresence>
+          </div>
 
-          <aside className="rounded-2xl border border-border bg-card p-5">
+          <aside className="rounded-2xl border border-border bg-card p-5 lg:sticky lg:top-24">
             <h2 className="text-sm font-medium">Launch summary</h2>
             <dl className="mt-4 space-y-3 text-sm">
               <Summary label="Engine" value="Plan → Gemini Pro" />
@@ -289,8 +374,14 @@ export function CreateStudio() {
               <Summary label="Inscribe at" value={`${MAX_GAME_BYTES} byte cap`} />
               <Summary label="ROM size" value={game ? `${game.compressedBytes} bytes` : "—"} />
               <Summary label="Ticker" value={symbol ? `$${symbol}` : "—"} />
-              <Summary label="Supply" value="Pump.fun curve" />
-              <Summary label="Dev buy" value={solBuy > 0 ? `${solBuy.toFixed(3)} SOL` : "None"} />
+              <Summary label="Supply" value="1B on Pump.fun curve" />
+              <Summary
+                label="Dev buy"
+                value={
+                  solBuy > 0 ? `${solBuy.toFixed(3)} SOL · ${pct.toFixed(2)}%` : "None"
+                }
+              />
+              <Summary label="Mayhem" value={mayhemMode ? "On" : "Off"} />
               <Summary label="Launch cost" value="network rent + Pump.fun" />
             </dl>
 
@@ -305,8 +396,7 @@ export function CreateStudio() {
               </p>
               <p className="flex gap-2">
                 <Info className="mt-0.5 size-3.5 shrink-0" />
-                Solana v1 transactions allow up to 4,096 bytes. We keep the gzipped game at 3,000 so the
-                instruction still fits.
+                Dev buy SOL and % stay in sync via the Pump.fun bonding curve, not a linear guess.
               </p>
             </div>
 
@@ -315,7 +405,7 @@ export function CreateStudio() {
                 <button
                   type="button"
                   onClick={() => void launch()}
-                  disabled={!game || overLimit || busy !== null || !name || !symbol}
+                  disabled={!showLaunch || overLimit || busy !== null || !name || !symbol}
                   className="flex h-11 w-full items-center justify-center rounded-xl bg-primary font-medium text-primary-foreground disabled:opacity-50"
                 >
                   {busy === "launch" ? "Launching…" : "Launch game + token"}
@@ -327,7 +417,7 @@ export function CreateStudio() {
               )}
             </div>
 
-            {status ? <p className="mt-3 text-xs text-positive">{status}</p> : null}
+            {status && !generating ? <p className="mt-3 text-xs text-positive">{status}</p> : null}
             {error ? <p className="mt-3 text-xs text-negative">{error}</p> : null}
           </aside>
         </div>

@@ -21,14 +21,16 @@ export async function uploadPumpMetadata(args: {
   description: string;
   image?: File | null;
   website?: string;
+  twitter?: string;
+  telegram?: string;
 }): Promise<string> {
   const body = new FormData();
   if (args.image) body.append("file", args.image);
   body.append("name", args.name);
   body.append("symbol", args.symbol);
   body.append("description", args.description);
-  body.append("twitter", "");
-  body.append("telegram", "");
+  body.append("twitter", args.twitter ?? "");
+  body.append("telegram", args.telegram ?? "");
   body.append("website", args.website ?? "");
   body.append("showName", "true");
 
@@ -47,6 +49,7 @@ export async function createPumpToken(args: {
   symbol: string;
   uri: string;
   solBuy: number;
+  mayhemMode?: boolean;
 }): Promise<{ mint: PublicKey; mintKeypair: Keypair; signature: string }> {
   if (!args.wallet.publicKey) throw new Error("Connect a wallet first.");
 
@@ -58,6 +61,7 @@ export async function createPumpToken(args: {
   const sdk = new OnlinePumpSdk(args.connection);
   const global = await sdk.fetchGlobal();
   const feeConfig = await sdk.fetchFeeConfig();
+  const mayhemMode = args.mayhemMode ?? false;
 
   const tx = new Transaction();
   tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }));
@@ -82,7 +86,7 @@ export async function createPumpToken(args: {
       user,
       amount,
       solAmount,
-      mayhemMode: false,
+      mayhemMode,
     });
     tx.add(...ixs);
   } else {
@@ -94,7 +98,7 @@ export async function createPumpToken(args: {
         uri: args.uri,
         creator: user,
         user,
-        mayhemMode: false,
+        mayhemMode,
       }),
     );
   }
