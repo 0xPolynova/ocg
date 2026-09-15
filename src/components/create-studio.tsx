@@ -166,6 +166,7 @@ export function CreateStudio() {
         storeSignatures: [],
         createSignature: created.signature,
         createdAt: Date.now(),
+        image: imagePreview ?? undefined,
         sparkline: [1, 2, 2, 3, 4, 4, 6, 7, 8, 9, 11, 13],
         marketCapUsd: solBuy * 150,
         volumeUsd: solBuy * 80,

@@ -65,8 +65,8 @@ export async function hydrateLaunches(): Promise<OcgLaunch[]> {
         if (!response.ok) return readLaunches();
         const remote = (await response.json()) as OcgLaunch[];
         if (!Array.isArray(remote)) return readLaunches();
-        writeLaunches(remote);
-        return remote;
+        writeLaunches(mergeLaunches(remote, readLaunches()));
+        return readLaunches();
       } catch {
         return readLaunches();
       }
@@ -108,6 +108,11 @@ export async function upsertLaunch(launch: OcgLaunch): Promise<OcgLaunch[]> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(launch),
+    }).then(async (response) => {
+      if (!response.ok) {
+        const json = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(json?.error ?? "Could not save the launch card.");
+      }
     });
   } catch {
     // Keep the local copy even if the API is down.

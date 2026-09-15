@@ -4,6 +4,7 @@ import express from "express";
 import multer from "multer";
 
 import { generateGameFromPrompt } from "../src/lib/generate-game";
+import { HELIUS_RPC_HTTP } from "../src/lib/solana-rpc";
 import type { PumpCoinStats } from "../src/lib/types";
 import { ensureLaunchSchema, getLaunch, listLaunches, parseLaunchBody, upsertLaunchRecord } from "./db";
 
@@ -15,8 +16,7 @@ const PUMP_ENDPOINTS = [
   "https://frontend-api-v3.pump.fun/ipfs",
 ];
 const PUMP_FUN_API = "https://frontend-api-v3.pump.fun";
-const SOLANA_RPC =
-  process.env.SOLANA_RPC ?? "https://api.mainnet-beta.solana.com";
+const SOLANA_RPC = process.env.SOLANA_RPC ?? HELIUS_RPC_HTTP;
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2_000_000 } });
 const app = express();

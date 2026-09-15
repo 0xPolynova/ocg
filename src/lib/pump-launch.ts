@@ -14,6 +14,7 @@ import type { PumpCoinStats } from "@/lib/types";
 
 type WalletSender = {
   publicKey: PublicKey | null;
+  signTransaction?: (transaction: VersionedTransaction) => Promise<VersionedTransaction>;
   sendTransaction: (
     transaction: VersionedTransaction,
     connection: Connection,
@@ -32,6 +33,41 @@ function compactMetadataUri(uri: string): string {
     if (short.length <= trimmed.length) return short;
   }
   return trimmed;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForSignature(
+  connection: Connection,
+  signature: string,
+  lastValidBlockHeight: number,
+): Promise<void> {
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    const { value } = await connection.getSignatureStatuses([signature], {
+      searchTransactionHistory: true,
+    });
+    const status = value[0];
+    if (status?.err) {
+      throw new Error("Pump.fun rejected the create transaction.");
+    }
+    if (status?.confirmationStatus === "confirmed" || status?.confirmationStatus === "finalized") {
+      return;
+    }
+    const height = await connection.getBlockHeight("confirmed");
+    if (height > lastValidBlockHeight) {
+      const again = await connection.getSignatureStatuses([signature], {
+        searchTransactionHistory: true,
+      });
+      const landed = again.value[0];
+      if (landed?.err) throw new Error("Pump.fun rejected the create transaction.");
+      if (landed?.confirmationStatus) return;
+      return;
+    }
+    await sleep(1200);
+  }
 }
 
 export async function uploadPumpMetadata(args: {
@@ -85,8 +121,9 @@ export async function createPumpToken(args: {
   const global = await sdk.fetchGlobal();
   const feeConfig = await sdk.fetchFeeConfig();
 
+  const solAmount = new BN(Math.max(0, Math.round(args.solBuy * 1_000_000_000)));
   const instructions =
-    args.solBuy > 0
+    solAmount.gt(new BN(0))
       ? await PUMP_SDK.createV2AndBuyInstructions({
           global,
           mint: mintKeypair.publicKey,
@@ -100,10 +137,10 @@ export async function createPumpToken(args: {
             feeConfig,
             mintSupply: null,
             bondingCurve: null,
-            amount: new BN(Math.round(args.solBuy * 1_000_000_000)),
+            amount: solAmount,
             quoteMint: NATIVE_MINT,
           }),
-          solAmount: new BN(Math.round(args.solBuy * 1_000_000_000)),
+          solAmount,
           mayhemMode,
         })
       : [
@@ -128,14 +165,24 @@ export async function createPumpToken(args: {
   );
   tx.sign([mintKeypair]);
 
-  const signature = await args.wallet.sendTransaction(tx, args.connection, {
-    signers: [mintKeypair],
-  });
-  await args.connection.confirmTransaction(
-    { signature, blockhash, lastValidBlockHeight },
-    "confirmed",
-  );
+  let signature: string;
+  if (args.wallet.signTransaction) {
+    const signed = await args.wallet.signTransaction(tx);
+    signature = await args.connection.sendRawTransaction(signed.serialize(), {
+      skipPreflight: false,
+      maxRetries: 5,
+      preflightCommitment: "confirmed",
+    });
+  } else {
+    signature = await args.wallet.sendTransaction(tx, args.connection, {
+      signers: [mintKeypair],
+      skipPreflight: false,
+      maxRetries: 5,
+      preflightCommitment: "confirmed",
+    });
+  }
 
+  await waitForSignature(args.connection, signature, lastValidBlockHeight);
   return { mint: mintKeypair.publicKey, mintKeypair, signature };
 }
 
