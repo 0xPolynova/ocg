@@ -10,7 +10,6 @@ const nextConfig: NextConfig = {
     "@coral-xyz/anchor",
     "@solana/wallet-adapter-base",
     "@solana/wallet-adapter-react",
-    "@solana/wallet-adapter-react-ui",
   ],
 };
 

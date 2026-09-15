@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/api";
 import { STORAGE_KEY } from "@/lib/constants";
 import type { OcgLaunch } from "@/lib/types";
 
@@ -6,6 +7,7 @@ const EMPTY: OcgLaunch[] = [];
 
 let cachedRaw: string | null = null;
 let cachedValue: OcgLaunch[] = EMPTY;
+let hydrating: Promise<OcgLaunch[]> | null = null;
 
 function canUseStorage(): boolean {
   return typeof window !== "undefined";
@@ -42,10 +44,69 @@ export function writeLaunches(launches: OcgLaunch[]): void {
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 
-export function upsertLaunch(launch: OcgLaunch): OcgLaunch[] {
-  const current = readLaunches().filter((item) => item.id !== launch.id);
-  const next = [launch, ...current];
+function mergeLaunches(primary: OcgLaunch[], secondary: OcgLaunch[]): OcgLaunch[] {
+  const seen = new Set<string>();
+  const next: OcgLaunch[] = [];
+  for (const launch of [...primary, ...secondary]) {
+    const key = launch.mint ?? launch.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    next.push(launch);
+  }
+  return next.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function hydrateLaunches(): Promise<OcgLaunch[]> {
+  if (!canUseStorage()) return EMPTY;
+  if (!hydrating) {
+    hydrating = (async () => {
+      try {
+        const response = await fetch(apiUrl("/api/launches"));
+        if (!response.ok) return readLaunches();
+        const remote = (await response.json()) as OcgLaunch[];
+        if (!Array.isArray(remote)) return readLaunches();
+        const merged = mergeLaunches(remote, readLaunches());
+        writeLaunches(merged);
+        return merged;
+      } catch {
+        return readLaunches();
+      }
+    })().finally(() => {
+      hydrating = null;
+    });
+  }
+  return hydrating;
+}
+
+export async function fetchLaunch(id: string): Promise<OcgLaunch | null> {
+  const local = readLaunches().find(
+    (item) => item.id === id || item.mint === id || item.symbol === id,
+  );
+  if (local) return local;
+  try {
+    const response = await fetch(apiUrl(`/api/launches/${encodeURIComponent(id)}`));
+    if (!response.ok) return null;
+    const launch = (await response.json()) as OcgLaunch;
+    if (!launch?.id) return null;
+    writeLaunches(mergeLaunches([launch], readLaunches()));
+    return launch;
+  } catch {
+    return null;
+  }
+}
+
+export async function upsertLaunch(launch: OcgLaunch): Promise<OcgLaunch[]> {
+  const next = mergeLaunches([launch], readLaunches());
   writeLaunches(next);
+  try {
+    await fetch(apiUrl("/api/launches"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(launch),
+    });
+  } catch {
+    // Keep the local copy even if the API is down.
+  }
   return next;
 }
 

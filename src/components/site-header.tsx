@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { Search } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand-logo";
+import { WalletButton } from "@/components/wallet-ui";
 import { APP_TAGLINE } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -59,7 +59,7 @@ export function SiteHeader({
           >
             Launch game
           </Link>
-          <WalletMultiButton />
+          <WalletButton />
         </div>
       </div>
     </header>

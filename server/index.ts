@@ -5,6 +5,7 @@ import multer from "multer";
 
 import { generateGameFromPrompt } from "../src/lib/generate-game";
 import type { PumpCoinStats } from "../src/lib/types";
+import { ensureLaunchSchema, getLaunch, listLaunches, parseLaunchBody, upsertLaunchRecord } from "./db";
 
 loadEnv({ path: ".env.local" });
 loadEnv({ path: ".env" });
@@ -52,10 +53,46 @@ app.use(
     },
   }),
 );
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "2mb" }));
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, service: "ocg-api" });
+  res.json({ ok: true, service: "ocg-api", db: Boolean(process.env.DATABASE_URL) });
+});
+
+app.get("/api/launches", async (_req, res) => {
+  try {
+    const launches = await listLaunches();
+    res.json(launches);
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Could not list launches." });
+  }
+});
+
+app.get("/api/launches/:id", async (req, res) => {
+  try {
+    const launch = await getLaunch(String(req.params.id ?? ""));
+    if (!launch) {
+      res.status(404).json({ error: "Launch not found." });
+      return;
+    }
+    res.json(launch);
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Could not load launch." });
+  }
+});
+
+app.post("/api/launches", async (req, res) => {
+  const launch = parseLaunchBody(req.body);
+  if (!launch) {
+    res.status(400).json({ error: "Launch is missing name, ticker, or ROM." });
+    return;
+  }
+  try {
+    const saved = await upsertLaunchRecord(launch);
+    res.json(saved);
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Could not save launch." });
+  }
 });
 
 app.post("/api/generate-game", async (req, res) => {
@@ -147,6 +184,9 @@ app.post("/rpc", async (req, res) => {
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
 const server = app.listen(port, "0.0.0.0", () => {
   console.log(`OCG API listening on ${port}`);
+  void ensureLaunchSchema().catch((error: unknown) => {
+    console.error("Launch schema failed:", error);
+  });
 });
 server.timeout = 180_000;
 server.headersTimeout = 185_000;

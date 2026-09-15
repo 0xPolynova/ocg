@@ -3,9 +3,8 @@
 import "@/lib/polyfills";
 import { useMemo, type ReactNode } from "react";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
-import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 
-import "@solana/wallet-adapter-react-ui/styles.css";
+import { WalletUiProvider } from "@/components/wallet-ui";
 
 export function WalletProviders({ children }: { children: ReactNode }) {
   const wallets = useMemo(() => [], []);
@@ -17,7 +16,7 @@ export function WalletProviders({ children }: { children: ReactNode }) {
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
+        <WalletUiProvider>{children}</WalletUiProvider>
       </WalletProvider>
     </ConnectionProvider>
   );

@@ -1,7 +1,6 @@
 "use client";
 
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { AnimatePresence, motion } from "framer-motion";
 import { Info, Lock, Sparkles, Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -10,6 +9,7 @@ import { useMemo, useState } from "react";
 import { RomCabinet } from "@/components/rom-cabinet";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { WalletButton } from "@/components/wallet-ui";
 import { apiUrl } from "@/lib/api";
 import { inscribeGame } from "@/lib/chain-store";
 import { MAX_GAME_BYTES } from "@/lib/constants";
@@ -155,7 +155,7 @@ export function CreateStudio() {
         volumeUsd: solBuy * 80,
         change24h: 0,
       };
-      upsertLaunch(record);
+      await upsertLaunch(record);
       setStatus("Launched. Your game is live on Launches.");
       router.push("/");
     } catch (err) {
@@ -414,9 +414,7 @@ export function CreateStudio() {
                   {busy === "launch" ? "Launching…" : "Launch game + token"}
                 </button>
               ) : (
-                <div className="flex justify-center [&_.wallet-adapter-button-trigger]:h-11 [&_.wallet-adapter-button-trigger]:w-full [&_.wallet-adapter-button-trigger]:justify-center">
-                  <WalletMultiButton />
-                </div>
+                <WalletButton fullWidth connectLabel="Select wallet to launch" />
               )}
             </div>
 

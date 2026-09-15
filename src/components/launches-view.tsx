@@ -6,7 +6,7 @@ import { FilterChips, LaunchCard } from "@/components/launch-card";
 import { PlayModal } from "@/components/play-modal";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { readLaunches, subscribeLaunches, getEmptyLaunches } from "@/lib/launches-store";
+import { hydrateLaunches, readLaunches, subscribeLaunches, getEmptyLaunches } from "@/lib/launches-store";
 import { fetchPumpStats } from "@/lib/pump-launch";
 import { SEED_LAUNCHES } from "@/lib/seed-games";
 import type { OcgLaunch } from "@/lib/types";
@@ -18,6 +18,10 @@ export function LaunchesView() {
   const [stats, setStats] = useState<Record<string, Partial<OcgLaunch>>>({});
   const [playing, setPlaying] = useState<OcgLaunch | null>(null);
   const mintKey = stored.map((item) => item.mint ?? "").join("|");
+
+  useEffect(() => {
+    void hydrateLaunches();
+  }, []);
 
   useEffect(() => {
     const mints = mintKey.split("|").filter(Boolean);
