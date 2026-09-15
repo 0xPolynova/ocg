@@ -201,6 +201,25 @@ export function CreateStudio() {
 
         <div className="mt-8 grid items-start gap-5 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-5">
+            <AnimatePresence>
+              {generating || game ? (
+                <motion.div
+                  key="cabinet"
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12 }}
+                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <RomCabinet
+                    game={game}
+                    generating={generating}
+                    title={name || "Preview"}
+                    onShot={onShot}
+                  />
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+
             <section className="rounded-2xl border border-border bg-card p-5 md:p-6">
               <Field label="Prompt">
                 <textarea
@@ -231,11 +250,9 @@ export function CreateStudio() {
                 className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-secondary px-4 text-sm font-medium hover:bg-secondary/80 disabled:opacity-50"
               >
                 <Wand2 className="size-4" />
-                {generating ? "Building ROM…" : game ? "Regenerate" : "Generate game"}
+                {generating ? "Building game…" : game ? "Regenerate" : "Generate game"}
               </button>
             </section>
-
-            <RomCabinet game={game} generating={generating} title={name || "Preview"} onShot={onShot} />
 
             <AnimatePresence>
               {showLaunch ? (
