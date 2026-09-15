@@ -41,8 +41,8 @@ HOW THIS GENRE WORKS — follow this loop, not a different one
 ${MECHANIC_RECIPES[plan.mechanic]}
 
 CODE SHAPE (required)
-The host already created <canvas id=c> and set canvas, cv, c, and ctx (2d). Use those names. Do not getElementById('canvas'). Do not assume an element id of canvas.
-Never store ctx in x,y,w,h,p,s,t,e,n.
+One HTML document. Put a <canvas id=c> in the body, then one script. Draw the HUD with fillText on the canvas. Do not use extra DOM, innerText, getElementById for UI, or overlay divs.
+The host aliases canvas, cv, c, and ctx (2d). Use those.
 VIEWPORT: on boot and resize set canvas.width=innerWidth; canvas.height=innerHeight. Every frame let W=innerWidth,H=innerHeight. NEVER hardcode 320/400/640. fillRect(0,0,W,H) the whole world.
 Split drawing into named functions: drawWorld, drawPlayer, drawHazards, drawHUD, drawTitle, drawOver. Keep entities in arrays. Do not dump the whole game into one anonymous loop.
 let mode=0; // 0 title, 1 play, 2 over
@@ -66,7 +66,7 @@ WHAT "FINISHED" MEANS (all required)
 6. Playable for 30+ seconds. At least one setpiece.
 
 BUDGET
-- Write at least ${TARGET_RAW_BYTES} characters of HTML/JS. Short output is a failed game. Keep adding sprite functions, rooms, and juice until you hit that size.
+- Write a finished game in one pass. About ${TARGET_RAW_BYTES} characters is enough. Do not pad.
 - No external URLs, images, fonts, or libraries. Keep best in a variable named best; localStorage is already stubbed.
 - Palette: bg #041014, player #8fd4de, good #3ddc8e, bad #f07178, accent #f8d36a, text #e8fbff.
 
@@ -74,7 +74,7 @@ Build "${idea}" as a real ${plan.mechanic} game with a ${plan.camera} camera.`;
 }
 
 export function implementUserPrompt(plan: GamePlan, idea: string): string {
-  return `Ship the finished "${plan.title}" game now. Camera is ${plan.camera}. Mechanic is ${plan.mechanic}. Fantasy: ${plan.fantasy}. You must output at least ${TARGET_RAW_BYTES} characters. Output ONLY the HTML document for "${idea}".`;
+  return `Ship the finished "${plan.title}" game now. Camera is ${plan.camera}. Mechanic is ${plan.mechanic}. Fantasy: ${plan.fantasy}. Output ONLY the HTML document for "${idea}".`;
 }
 
 export function polishPrompt(plan: GamePlan, idea: string): string {

@@ -1,10 +1,10 @@
 export const APP_NAME = "OCG";
 export const APP_TAGLINE = "OnChainGame";
 export const APP_DESCRIPTION =
-  "Prompt a playable game, host it on OCG, and launch a Pump.fun token whose metadata points at the play URL.";
+  "Prompt, play, launch a token on Pump.fun.";
 
-/** Soft target for generated HTML. Games are hosted, so use the room. */
-export const TARGET_RAW_BYTES = 55000;
+/** Soft target for generated HTML. One model pass, not a novella. */
+export const TARGET_RAW_BYTES = 14000;
 
 export const OPENROUTER_MODEL_DEFAULT = "qwen/qwen3-coder-next";
 /** HTML game coder — same long-context cheap model as planning. */

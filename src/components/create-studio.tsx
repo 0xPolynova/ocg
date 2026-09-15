@@ -194,8 +194,7 @@ export function CreateStudio() {
         <div className="max-w-xl">
           <h1 className="text-3xl font-semibold tracking-tight">Create a game</h1>
           <p className="mt-2 text-muted-foreground">
-            Prompt a playable arcade. It fills the cabinet, then you launch the Pump.fun coin with
-            the play URL in the token metadata.
+            Prompt, play, launch a token on Pump.fun.
           </p>
         </div>
 
