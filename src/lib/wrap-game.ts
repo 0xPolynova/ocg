@@ -10,9 +10,7 @@ function findCv(){return document.getElementsByTagName('canvas')[0]||null}
 function ensureCv(){let c=findCv();if(c)return c;c=document.createElement('canvas');c.id='c';(document.body||document.documentElement).appendChild(c);return c}
 Object.defineProperty(window,'cv',{configurable:true,get:findCv,set(){}});
 Object.defineProperty(window,'canvas',{configurable:true,get:findCv,set(){}});
-Object.defineProperty(window,'c',{configurable:true,get:findCv});
 Object.defineProperty(window,'ctx',{configurable:true,get(){const c=findCv();return c?c.getContext('2d'):null}});
-Object.defineProperty(window,'C',{configurable:true,get(){const c=findCv();return c?c.getContext('2d'):null}});
 const _gebi=Document.prototype.getElementById;
 Document.prototype.getElementById=function(id){id=String(id);const el=_gebi.call(this,id);if(el)return el;if(id==='c'||id==='canvas'||id==='gameCanvas'||id==='cv'||id==='screen')return findCv()||ghost(id);return ghost(id)};
 const _qs=Document.prototype.querySelector;
@@ -27,10 +25,7 @@ function shake(n){_sh=Math.max(_sh,n)}
 window.beep=beep;window.burst=burst;window.shake=shake;
 addEventListener('pointerdown',()=>{try{_ac&&_ac.resume()}catch(e){}});
 const _raf=requestAnimationFrame.bind(window);
-requestAnimationFrame=f=>_raf(t=>{f(t);const c=findCv(),g=c&&c.getContext&&c.getContext('2d');if(g){for(let i=_bits.length;i--;){const p=_bits[i];p.x+=p.vx;p.y+=p.vy;p.vy+=.16;p.l--;g.globalAlpha=Math.max(0,p.l/20);g.fillStyle=p.col;g.fillRect(p.x,p.y,3,3);if(p.l<=0)_bits.splice(i,1)}g.globalAlpha=1}if(c){if(_sh>0.4){c.style.transform='translate('+((Math.random()-.5)*_sh)+'px,'+((Math.random()-.5)*_sh)+'px)'}else{c.style.transform='none'}_sh*=.84}});
-function paintErr(err){try{const c=ensureCv(),g=c.getContext('2d'),b=box();c.width=b.w;c.height=b.h;g.fillStyle='#041014';g.fillRect(0,0,c.width,c.height);g.fillStyle='#f07178';g.font='14px sans-serif';g.fillText(String(err&&err.message||err),16,36)}catch(e){}}
-window.onerror=function(m){paintErr(m);};
-window.addEventListener('unhandledrejection',function(e){paintErr(e.reason)});
+requestAnimationFrame=f=>_raf(t=>{if(typeof f==='function')f(t);const c=findCv(),g=c&&c.getContext&&c.getContext('2d');if(g){for(let i=_bits.length;i--;){const p=_bits[i];p.x+=p.vx;p.y+=p.vy;p.vy+=.16;p.l--;g.globalAlpha=Math.max(0,p.l/20);g.fillStyle=p.col;g.fillRect(p.x,p.y,3,3);if(p.l<=0)_bits.splice(i,1)}g.globalAlpha=1}if(c){if(_sh>0.4){c.style.transform='translate('+((Math.random()-.5)*_sh)+'px,'+((Math.random()-.5)*_sh)+'px)'}else{c.style.transform='none'}_sh*=.84}});
 function snapSoon(){let n=0;function tick(){n++;if(n<24){_raf(tick);return}try{const c=findCv();if(!c||c.width<16||c.height<16)return;const s=1000,out=document.createElement('canvas');out.width=s;out.height=s;const g=out.getContext('2d');if(!g)return;g.fillStyle='#041014';g.fillRect(0,0,s,s);const scale=Math.max(s/c.width,s/c.height);const dw=c.width*scale,dh=c.height*scale;g.imageSmoothingEnabled=false;g.drawImage(c,(s-dw)/2,(s-dh)/2,dw,dh);parent.postMessage({type:'ocg-shot',dataUrl:out.toDataURL('image/png')},'*')}catch(err){}}_raf(tick)}
 function whenReady(fn){if(document.readyState==='complete'||document.readyState==='interactive')fn();else document.addEventListener('DOMContentLoaded',fn)}
 whenReady(function(){const c=ensureCv(),b=box();if(b.w>=80&&(!c.width||c.width<16)){c.width=b.w;c.height=b.h}snapSoon()});
