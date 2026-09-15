@@ -25,6 +25,8 @@ export type Mechanic = (typeof MECHANICS)[number];
 export type GamePlan = {
   title: string;
   mechanic: Mechanic;
+  fantasy: string;
+  camera: string;
   controls: string;
   player: string;
   hazards: string;
@@ -61,89 +63,153 @@ export const FAMOUS: {
   player: string;
   hazards: string;
   controls: string;
+  camera: string;
   brief: string;
 }[] = [
   {
     re: /\bdoom\b|wolfenstein|quake/,
     mechanic: "fps",
     title: "DOOM",
-    player: "shotgun at the bottom of a first-person view",
-    hazards: "imps/demons in corridors",
-    controls: "WASD move, arrows turn, click shoot",
-    brief: "First-person 2.5D DDA raycaster. Grid maze, textured-looking wall columns, floor/ceiling split, shotgun sprite, demon billboards, HP/kills. NOT top-down, NOT snake, NOT falling objects.",
+    player: "shotgun sprite covering the bottom of a first-person view",
+    hazards: "imps and demons in brick corridors",
+    controls: "WASD move, arrows/mouse turn, click shoot",
+    camera: "first-person",
+    brief: "First-person 2.5D DDA raycaster through a labyrinth. Ceiling/floor split, wall columns by distance, shotgun in the foreground, demon sprites that scale with depth, HP and kills. WASD + turn + click. This is DOOM, not a top-down arcade.",
   },
   {
     re: /\bmario\b/,
     mechanic: "platformer",
     title: "MARIO",
-    player: "small plumber with cap and mustache",
+    player: "small plumber with cap, mustache, overalls",
     hazards: "pits and walking mushrooms",
     controls: "arrows move, up/click jump",
-    brief: "Side-view platformer with gravity, solid blocks, goomba stomps.",
+    camera: "side-view",
+    brief: "Side-scrolling platformer: gravity, solid blocks, coins, goomba stomps, flag/goal. Never a top-down dodge game.",
   },
   {
     re: /\btetris\b/,
     mechanic: "stacker",
     title: "TETRIS",
-    player: "falling tetrominoes",
-    hazards: "stack reaching the top",
+    player: "falling tetrominoes (I,O,T,L,J,S,Z)",
+    hazards: "the stack reaching the top",
     controls: "arrows move/rotate, down drop",
-    brief: "Tetromino stacker. Shapes, line clears, rising speed.",
+    camera: "side-view grid",
+    brief: "Seven tetrominoes, rotate, lock, clear full rows, speed ramps. Not falling circles.",
   },
   {
     re: /\bpac-?man\b/,
     mechanic: "maze",
     title: "PAC-MAN",
-    player: "yellow pie-mouth",
+    player: "yellow pie-mouth that chomps",
     hazards: "colored ghosts",
     controls: "arrows through a pellet maze",
-    brief: "Top-down maze, pellets, ghosts. Not a dodge-falling game.",
+    camera: "top-down",
+    brief: "Top-down maze, pellets, four ghosts, wrap tunnels. Not a dodge-falling game.",
   },
   {
     re: /\bflappy\b/,
     mechanic: "flappy",
     title: "FLAPPY",
-    player: "chunky bird",
+    player: "chunky bird with wing and beak",
     hazards: "pipe gaps",
     controls: "click/space flap",
-    brief: "Fixed X, gravity, flap, pipes.",
+    camera: "side-view",
+    brief: "Fixed X, gravity, flap, scrolling pipe gaps, score on pass.",
+  },
+  {
+    re: /\bsnake\b|\bsnek\b/,
+    mechanic: "snake",
+    title: "SNAKE",
+    player: "growing segmented snake",
+    hazards: "walls and your own tail",
+    controls: "arrows/WASD, no 180 reverse",
+    camera: "top-down grid",
+    brief: "Grid snake: grow on food, die on self/wall, rising tick speed.",
+  },
+  {
+    re: /\bpong\b/,
+    mechanic: "pong",
+    title: "PONG",
+    player: "glowing paddle",
+    hazards: "missing the ball",
+    controls: "arrows or mouse on the paddle",
+    camera: "side-view",
+    brief: "Two paddles, bouncing ball, speed-up, score. Tennis, not dodge.",
+  },
+  {
+    re: /\bbreakout\b|\barkanoid\b/,
+    mechanic: "breakout",
+    title: "BREAKOUT",
+    player: "bottom paddle",
+    hazards: "ball falling off screen",
+    controls: "arrows/mouse move paddle",
+    camera: "side-view",
+    brief: "Paddle, ball, colored brick grid that vanishes on hit.",
+  },
+  {
+    re: /\bfrogger\b/,
+    mechanic: "frogger",
+    title: "FROGGER",
+    player: "frog with legs",
+    hazards: "cars and drowning",
+    controls: "arrow hop one tile",
+    camera: "top-down lanes",
+    brief: "Hop lanes of cars then ride logs. Far bank scores. Not falling objects.",
+  },
+  {
+    re: /space.?invader|galaga|galaxian/,
+    mechanic: "shooter",
+    title: "INVADERS",
+    player: "cannon at the bottom",
+    hazards: "descending alien grid",
+    controls: "arrows move, space/click fire",
+    camera: "rail shooter",
+    brief: "Bottom cannon vs marching alien rows, shields, fire bullets up.",
   },
 ];
 
+export function cameraFor(mechanic: Mechanic): string {
+  switch (mechanic) {
+    case "fps":
+      return "first-person";
+    case "flappy":
+    case "platformer":
+    case "runner":
+    case "aim":
+    case "pong":
+    case "breakout":
+    case "stacker":
+      return "side-view";
+    case "snake":
+    case "frogger":
+    case "maze":
+    case "memory":
+      return "top-down";
+    case "shooter":
+      return "top-down or rail";
+    default:
+      return "the camera that idea is famous for";
+  }
+}
+
 export const MECHANIC_RECIPES: Record<Mechanic, string> = {
-  fps: "LOOP: first-person raycaster. px,py,pa. WASD move with collision on a grid map of 0/1 walls. Arrows turn pa. For each screen column, cast a ray (step along cos/sin until wall) and fillRect a vertical strip whose height is H/dist. Draw floor/ceiling split. Demons as scaled rects by distance+angle. Click shoots along pa. HUD HP + kills. FORBIDDEN: top-down snake, mouse-dodge, falling circles.",
-  snake:
-    "LOOP: cell grid (~16px). snake=[{x,y},…], dir, food. Every few frames prepend a new head and pop the tail unless food was eaten (then s++). Die on wall or overlapping a body cell. Arrows/WASD change dir (block 180° reverse). Mouse does NOT steer the head.",
-  flappy:
-    "LOOP: py+=vy; vy+=gravity; click/space sets vy to a negative flap. Obstacles with a gap scroll left. Score when you pass a gap. Die on obstacle/ground/ceiling. Horizontal position is fixed — not mouse-follow.",
-  shooter:
-    "LOOP: ship near bottom, px follows pointer X. Click/space pushes bullets upward. Hostiles spawn and move. AABB bullet-vs-hostile (s++ and burst). Die if a hostile hits the ship. You MUST shoot; dodging alone is a fail.",
-  platformer:
-    "LOOP: gravity + jump on click/up if grounded. Solid rect platforms. Move with arrows/pointer. Die on hazard or falling out. Score by distance or coins.",
-  frogger:
-    "LOOP: frog hops one row on arrow/click. Rows are lanes of moving logs/cars. Land on a log to ride it; water/car = death. Reach the far bank to score and reset row. Not a free-move dodge.",
-  pong:
-    "LOOP: paddle(s) + ball with vx,vy. Bounce on walls/paddle, speed up on hit. Score or die when the ball passes the paddle.",
-  breakout:
-    "LOOP: paddle + ball + grid of bricks. Ball bounce; brick hit removes brick and scores. Die if ball falls below paddle.",
-  dodge:
-    "LOOP: ONLY if the idea is literally dodge/avoid. Player follows pointer on one axis. Hazards spawn and move. Hit = death. Still draw the prompt's creatures, not generic blobs.",
-  collector:
-    "LOOP: catch good items, avoid bad ones. Good = score; bad or missed good = fail. Distinct sprites for good vs bad.",
-  maze:
-    "LOOP: grid. Player steps cell-by-cell with arrows. Walls block. Collect dots/key, maybe a chaser. Win/score by pellets; die on chaser.",
-  rhythm:
-    "LOOP: notes travel toward a hit line. Press a key/click when a note overlaps the line. Early/late miss. Score streaks.",
-  aim:
-    "LOOP: click/hold sets angle or power, release launches a projectile with gravity. Hit targets to score. Not pointer-follow movement.",
-  stacker:
-    "LOOP: a moving block. Click to drop/place it on the stack. Misalign shrinks width. Miss completely = game over. Height is score.",
-  runner:
-    "LOOP: world auto-scrolls. Player grounded, click/up jumps (maybe double). Obstacles approach from the right. Distance is score.",
-  memory:
-    "LOOP: show a sequence of tiles/colors, then the player repeats it. Wrong tap = fail. Length is score.",
-  custom:
-    "Invent a loop from the VERBS in the prompt (hop, shoot, eat, stack, match, swim, grow, aim). Do NOT use mouse-follow + falling objects unless those verbs are dodge/avoid/catch.",
+  fps: `CAMERA: first-person. LOOP: px,py,pa on a 1/0 grid. WASD with wall collision, arrows turn. For each column, step a ray along cos/sin until a wall and draw a vertical strip height H/dist (shade by distance). Ceiling vs floor colors. Enemies are scaled billboards by angle+distance. Click shoots a hitscan along pa. HP, ammo or kills. Rooms, not an empty box.`,
+  snake: `CAMERA: top-down grid. LOOP: snake as [{x,y}…]. Tick: unshift head, pop tail unless food eaten (grow + score). Die on wall or self. Arrows/WASD, no 180 reverse. Food, wrap or walls, rising speed. The body must look like a snake, not dots.`,
+  flappy: `CAMERA: side scroller, player X fixed. LOOP: py+=vy; vy+=gravity; click/space flaps vy negative. Pipes with gaps scroll left. Score on pass. Die on pipe/ground/ceiling. Bird with wing/beak, not a circle.`,
+  shooter: `CAMERA: top-down or rail shooter. LOOP: ship, bullets you fire, enemies that shoot or dive. Click/space fire is mandatory. Collisions score/kill. Stars, ship triangle, distinct enemy shapes. Gets denser over time.`,
+  platformer: `CAMERA: side view. LOOP: gravity, jump if grounded, run with arrows. Solid platforms, pits, stomps or coins. Character with a silhouette (hat, legs), not a square.`,
+  frogger: `CAMERA: top-down lanes. LOOP: hop one row per input. Moving logs/cars. Water/car = death. Far bank scores and resets. Frog with legs, logs that carry you.`,
+  pong: `CAMERA: side. LOOP: paddle + ball vx/vy, bounce, speed up, score or miss. Glow trail on the ball. Feels like tennis, not dodge.`,
+  breakout: `CAMERA: side. LOOP: paddle, ball, brick grid. Bricks vanish and score. Ball drops = death. Color rows of bricks.`,
+  dodge: `CAMERA: whatever fits the idea (often chase-cam top-down). LOOP: only if the idea is dodge/avoid. Player follows one axis. Hazards match the prompt (moons, not red circles). Survival score, ramp.`,
+  collector: `CAMERA: usually side or top. LOOP: catch good, avoid bad, miss-good may fail. Two clearly different item sprites.`,
+  maze: `CAMERA: top-down grid. LOOP: cell steps, walls, pellets, a chaser. Pac-Man DNA if they asked for it.`,
+  rhythm: `CAMERA: highway or pads. LOOP: notes approach a hit line, tap in time, streak score.`,
+  aim: `CAMERA: side. LOOP: angle/power, projectile with gravity, targets. Golf/cannon/sling feel.`,
+  stacker: `CAMERA: side. LOOP: sliding block, click to drop onto the stack, shrink on miss, height is score. Tetris if they asked: tetrominoes + line clear.`,
+  runner: `CAMERA: side auto-scroll. LOOP: jump obstacles, distance score, rising speed.`,
+  memory: `CAMERA: pads. LOOP: show a sequence, player repeats, length is score. Lit pads, not falling objects.`,
+  custom: `Invent the camera and loop from the player's fantasy and verbs. If they named a known game, steal its camera. Never default to mouse-dodge falling circles.`,
 };
 
 const STOP = new Set([
@@ -280,6 +346,8 @@ export function parsePlan(raw: string, prompt: string): GamePlan {
   return {
     title: title || "OCG",
     mechanic,
+    fantasy: parsed.fantasy ?? known?.brief ?? `You are playing ${idea}`,
+    camera: parsed.camera ?? known?.camera ?? cameraFor(mechanic),
     controls: known?.controls ?? parsed.controls ?? "keyboard and pointer",
     player: known?.player ?? parsed.player ?? tokens[0] ?? "hero",
     hazards: known?.hazards ?? parsed.hazards ?? "obstacles",
@@ -343,6 +411,15 @@ export function followsTheme(html: string, plan: GamePlan, prompt: string): bool
   const hits = tokens.filter((token) => lower.includes(token)).length;
   if (tokens.length <= 1) return titleHit || hits >= 1;
   return titleHit || hits >= Math.min(2, tokens.length);
+}
+
+export function isThinRom(html: string): boolean {
+  return (
+    html.length < 4200 ||
+    !/requestAnimationFrame/.test(html) ||
+    !/fillText/.test(html) ||
+    !/(game.?over|best)/i.test(html)
+  );
 }
 
 export function tickerFromPlan(plan: GamePlan): { name: string; symbol: string } {

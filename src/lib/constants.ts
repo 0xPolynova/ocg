@@ -5,8 +5,8 @@ export const APP_DESCRIPTION =
 
 /** Hard cap for gzipped game bytes stored in Solana instruction data. */
 export const MAX_GAME_BYTES = 3000;
-/** Raw HTML budget. Gzip of tight JS is ~2.5–3×, so this still fits on-chain. */
-export const TARGET_RAW_BYTES = 7800;
+/** Raw HTML budget. Gzip of dense JS is often ~2×, then we shrink if needed. */
+export const TARGET_RAW_BYTES = 10500;
 
 export const OPENROUTER_MODEL_DEFAULT = "qwen/qwen3-coder-next";
 /** HTML ROM coder — cheap coding model, stronger at JS than Gemini Flash. */

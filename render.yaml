@@ -10,7 +10,9 @@ services:
       - key: NODE_VERSION
         value: "24"
       - key: OPENROUTER_MODEL
-        value: google/gemini-2.5-flash
+        value: qwen/qwen3-coder-next
+      - key: OPENROUTER_CODE_MODEL
+        value: qwen/qwen3-coder
       - key: OPENROUTER_API_KEY
         sync: false
       - key: SOLANA_RPC

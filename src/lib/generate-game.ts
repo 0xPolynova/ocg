@@ -12,55 +12,28 @@ import {
   genreFromMechanic,
   hasMechanicSignals,
   isGenericDodgeReskin,
-  MECHANIC_RECIPES,
+  isThinRom,
   normalizeIdea,
   parsePlan,
   pickMechanic,
   tickerFromPlan,
   type GamePlan,
 } from "./game-plan";
+import {
+  implementSystemPrompt,
+  implementUserPrompt,
+  planSystemPrompt,
+  polishPrompt,
+  shrinkPrompt,
+  wrongGamePrompt,
+} from "./game-prompt";
 import { extractHtml } from "./minify-game";
 import { fallbackGame } from "./seed-games";
 import type { GenerateGameResponse } from "./types";
 
-const PLAN_PROMPT = `You are a game director. Turn the player's idea into a micro-arcade that IS that idea.
-Return ONLY JSON:
-{"title":"SHOUTY TITLE","mechanic":"fps|snake|flappy|shooter|platformer|frogger|pong|breakout|dodge|collector|maze|rhythm|aim|stacker|runner|memory|custom","controls":"how you play","player":"what the player looks like","hazards":"what hurts/blocks","goal":"how score increases","fail":"how you die","unique":"the camera + loop that match the idea","mustDraw":["visual A","visual B"],"hint":"one-line control hint"}
-Rules:
-- If they named a famous game, clone its CAMERA: Doom/Wolfenstein = fps raycaster. Mario = side platformer. Tetris = stacker. Pac-Man = maze. Flappy = flap. Snake = snake.
-- NEVER pick snake, dodge, or pong unless the idea actually is that game.
-- title MUST contain the idea's main noun (DOOM if they said doom).`;
-
-function implementPrompt(plan: GamePlan, idea: string): string {
-  const known = famousGame(idea);
-  return `You are a senior Flash arcade coder. Write ONE HTML5 canvas game. Output ONLY HTML.
-
-HARD CAP: ${TARGET_RAW_BYTES} characters. No markdown, fences, comments, URLs, images, libraries.
-
-THE PLAYER TYPED: "${idea}"
-That sentence IS the game. If they said Doom, the camera is first-person corridors with a gun — not snake, not dodge, not pong.
-${known ? `FAMOUS-GAME LOCK: ${known.brief}` : ""}
-
-LOCKED DESIGN:
-${JSON.stringify(plan)}
-
-MECHANIC RECIPE — this loop only:
-${MECHANIC_RECIPES[plan.mechanic]}
-
-Runtime already injected (CALL, do not redefine): beep(freq,sec) burst(x,y,color,n) shake(px)
-Canvas id=c, 2d context is ctx. NEVER store the context in x,y,w,h,p,s,t,e,n.
-
-Rules:
-1. fillText the exact title "${plan.title}" on the title screen. Hint: ${plan.hint}
-2. Draw ${plan.player} and ${plan.hazards} so a stranger would recognize the idea.
-3. TITLE → PLAY → GAME OVER with score + best. Juice: beep/burst/shake. Difficulty ramps.
-4. Palette: bg #041014, player #8fd4de, good #3ddc8e, bad #f07178, accent #f8d36a, text #e8fbff.
-5. requestAnimationFrame. Controls: ${plan.controls}
-FORBIDDEN: ignoring the typed idea; swapping in snake/dodge because they are easier.
-Build "${idea}" as ${plan.mechanic}.`;
-}
-
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
+
+const CODE_TOKENS = 8192;
 
 async function chat(
   apiKey: string,
@@ -79,7 +52,7 @@ async function chat(
     body: JSON.stringify({
       model,
       temperature: opts?.temperature ?? 0.5,
-      max_tokens: opts?.maxTokens ?? 4096,
+      max_tokens: opts?.maxTokens ?? CODE_TOKENS,
       messages,
     }),
   });
@@ -134,6 +107,14 @@ function pack(
   };
 }
 
+function badFit(html: string, plan: GamePlan, idea: string): boolean {
+  return (
+    isGenericDodgeReskin(html, plan.mechanic) ||
+    !hasMechanicSignals(html, plan.mechanic) ||
+    !followsTheme(html, plan, idea)
+  );
+}
+
 export async function generateGameFromPrompt(prompt: string): Promise<{
   status: number;
   body: GenerateGameResponse | { error: string };
@@ -171,71 +152,74 @@ export async function generateGameFromPrompt(prompt: string): Promise<{
         planModel,
         OPENROUTER_FALLBACK_MODEL,
         [
-          { role: "system", content: PLAN_PROMPT },
+          { role: "system", content: planSystemPrompt() },
           {
             role: "user",
             content: `The player typed: "${trimmed}"\nNormalized idea: "${idea}"\nIf a mechanic is obvious use ${hinted}. Do not replace their idea with snake or dodge.`,
           },
         ],
-        { temperature: 0.3, maxTokens: 500 },
+        { temperature: 0.25, maxTokens: 700 },
       );
       plan = parsePlan(planned.text, idea);
     }
     if (hinted !== "custom") plan.mechanic = hinted;
 
-    const build = async (strict = false) => {
-      const extra = strict
-        ? `\nYOU BUILT THE WRONG GAME. The player asked for "${idea}". Rewrite from scratch as ${plan.mechanic}. Title fillText MUST be "${plan.title}". ${known?.brief ?? ""}`
-        : "";
-      const made = await withModelFallback(
-        apiKey,
-        codeModel,
-        OPENROUTER_FALLBACK_MODEL,
-        [
-          { role: "system", content: implementPrompt(plan, idea) + extra },
-          {
-            role: "user",
-            content: `Code "${idea}" now as ${plan.mechanic}. Output ONLY HTML. If this is not recognizably "${idea}", you failed.`,
-          },
-        ],
-        { temperature: strict ? 0.2 : 0.45, maxTokens: 4096 },
-      );
+    const writeRom = async (messages: ChatMessage[], temperature: number) => {
+      const made = await withModelFallback(apiKey, codeModel, OPENROUTER_FALLBACK_MODEL, messages, {
+        temperature,
+        maxTokens: CODE_TOKENS,
+      });
       return { html: extractHtml(made.text), model: made.model };
     };
 
-    let made = await build(false);
+    let made = await writeRom(
+      [
+        { role: "system", content: implementSystemPrompt(plan, idea) },
+        { role: "user", content: implementUserPrompt(plan, idea) },
+      ],
+      0.5,
+    );
     let html = made.html;
     let usedModel = made.model;
 
-    const badFit =
-      isGenericDodgeReskin(html, plan.mechanic) ||
-      !hasMechanicSignals(html, plan.mechanic) ||
-      !followsTheme(html, plan, idea);
+    if (badFit(html, plan, idea)) {
+      made = await writeRom(
+        [
+          { role: "system", content: implementSystemPrompt(plan, idea) },
+          { role: "assistant", content: html },
+          { role: "user", content: wrongGamePrompt(plan, idea) },
+        ],
+        0.2,
+      );
+      html = made.html;
+      usedModel = made.model;
+    }
 
-    if (badFit) {
-      made = await build(true);
+    if (isThinRom(html) && /requestAnimationFrame/.test(html)) {
+      made = await writeRom(
+        [
+          { role: "system", content: implementSystemPrompt(plan, idea) },
+          { role: "assistant", content: html },
+          { role: "user", content: polishPrompt(plan, idea) },
+        ],
+        0.35,
+      );
       html = made.html;
       usedModel = made.model;
     }
 
     let compressed = compressGame(html).byteLength;
     if (utf8Bytes(html) > TARGET_RAW_BYTES * 1.15 || compressed > MAX_GAME_BYTES) {
-      const shrunk = await withModelFallback(
-        apiKey,
-        codeModel,
-        OPENROUTER_FALLBACK_MODEL,
+      made = await writeRom(
         [
-          { role: "system", content: implementPrompt(plan, idea) },
+          { role: "system", content: implementSystemPrompt(plan, idea) },
           { role: "assistant", content: html },
-          {
-            role: "user",
-            content: `Same ${plan.mechanic} game, 30% fewer characters. Keep title "${plan.title}", sprites, and the mechanic. Under ${TARGET_RAW_BYTES} chars. Output ONLY HTML.`,
-          },
+          { role: "user", content: shrinkPrompt(plan, idea) },
         ],
-        { temperature: 0.2, maxTokens: 4096 },
+        0.15,
       );
-      html = extractHtml(shrunk.text);
-      usedModel = shrunk.model;
+      html = made.html;
+      usedModel = made.model;
       compressed = compressGame(html).byteLength;
     }
 

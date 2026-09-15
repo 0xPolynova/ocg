@@ -145,6 +145,9 @@ app.post("/rpc", async (req, res) => {
 });
 
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
-app.listen(port, "0.0.0.0", () => {
+const server = app.listen(port, "0.0.0.0", () => {
   console.log(`OCG API listening on ${port}`);
 });
+server.timeout = 180_000;
+server.headersTimeout = 185_000;
+server.requestTimeout = 180_000;

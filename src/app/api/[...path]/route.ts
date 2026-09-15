@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 
 import { proxyToBackend } from "@/lib/proxy-to-backend";
 
-export const maxDuration = 60;
+export const maxDuration = 180;
 
 type RouteContext = { params: Promise<{ path: string[] }> };
 

@@ -9,10 +9,11 @@ import type { GenerateGameResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const LOADING_LINES = [
-  "Planning mechanic…",
-  "Drawing sprites…",
-  "Wiring the loop…",
-  "Packing ROM…",
+  "Writing the design…",
+  "Building the world…",
+  "Drawing the character…",
+  "Tuning the loop…",
+  "Packing the ROM…",
 ];
 
 export function RomCabinet({
