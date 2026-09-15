@@ -1,6 +1,6 @@
 "use client";
 
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { Keypair } from "@solana/web3.js";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Info, Lock, Sparkles, Wand2 } from "lucide-react";
@@ -28,7 +28,6 @@ import type { GenerateGameResponse, OcgLaunch } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function CreateStudio() {
-  const { connection } = useConnection();
   const wallet = useWallet();
   const router = useRouter();
 
@@ -138,14 +137,13 @@ export function CreateStudio() {
 
       setStatus("Creating Pump.fun token…");
       const created = await createPumpToken({
-        connection,
         wallet,
         name,
         symbol,
         uri,
         solBuy,
         mayhemMode,
-        mintKeypair,
+        mintSecretKey: mintKeypair.secretKey,
       });
 
       setStatus("Saving game…");

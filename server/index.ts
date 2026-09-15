@@ -3,7 +3,10 @@ import { config as loadEnv } from "dotenv";
 import express from "express";
 import multer from "multer";
 
+import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+
 import { generateGameFromPrompt } from "../src/lib/generate-game";
+import { buildMintSignedPumpCreateTx } from "../src/lib/pump-create-tx";
 import { HELIUS_RPC_HTTP } from "../src/lib/solana-rpc";
 import type { PumpCoinStats } from "../src/lib/types";
 import { ensureLaunchSchema, getLaunch, listLaunches, parseLaunchBody, upsertLaunchRecord } from "./db";
@@ -165,6 +168,55 @@ app.post("/api/ipfs", upload.single("file"), async (req, res) => {
     uri: `data:application/json,${encodeURIComponent(JSON.stringify(metadata))}`,
     fallback: true,
   });
+});
+
+app.post("/api/pump/create-tx", async (req, res) => {
+  try {
+    const user = typeof req.body?.user === "string" ? req.body.user : "";
+    const name = typeof req.body?.name === "string" ? req.body.name : "";
+    const symbol = typeof req.body?.symbol === "string" ? req.body.symbol : "";
+    const uri = typeof req.body?.uri === "string" ? req.body.uri : "";
+    const solBuy = Number(req.body?.solBuy ?? 0);
+    const mayhemMode = Boolean(req.body?.mayhemMode);
+    const mintSecret = Array.isArray(req.body?.mintSecretKey)
+      ? Uint8Array.from(req.body.mintSecretKey as number[])
+      : null;
+
+    if (!user || !name || !symbol || !uri || !mintSecret || mintSecret.length !== 64) {
+      res.status(400).json({ error: "Create transaction is missing wallet, name, ticker, or mint." });
+      return;
+    }
+    if (!Number.isFinite(solBuy) || solBuy < 0) {
+      res.status(400).json({ error: "Dev buy is invalid." });
+      return;
+    }
+
+    const connection = new Connection(SOLANA_RPC, { commitment: "confirmed" });
+    const mintKeypair = Keypair.fromSecretKey(mintSecret);
+    const built = await buildMintSignedPumpCreateTx({
+      connection,
+      user: new PublicKey(user),
+      mintKeypair,
+      name,
+      symbol,
+      uri,
+      solBuy,
+      mayhemMode,
+    });
+
+    res.json({
+      transaction: Buffer.from(built.transaction.serialize()).toString("base64"),
+      mint: mintKeypair.publicKey.toBase58(),
+      blockhash: built.blockhash,
+      lastValidBlockHeight: built.lastValidBlockHeight,
+      buyLamports: built.solLamports.toString(),
+      buyTokens: built.tokenAmount.toString(),
+    });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Could not build the Pump.fun create transaction.",
+    });
+  }
 });
 
 app.post("/rpc", async (req, res) => {
