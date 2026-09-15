@@ -38,11 +38,11 @@ function getPool(): Pool | null {
   const url = databaseUrl();
   if (!url) return null;
   if (pool === undefined) {
-    const local = /localhost|127\.0\.0\.1/.test(url);
+    const needsSsl = /render\.com|sslmode=require/.test(url);
     pool = new Pool({
       connectionString: url,
       max: 5,
-      ssl: local ? undefined : { rejectUnauthorized: false },
+      ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
     });
   }
   return pool ?? null;
