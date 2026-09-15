@@ -10,7 +10,7 @@ import { buildMintSignedPumpCreateTx } from "../src/lib/pump-create-tx";
 import { maxPumpBuySol, pumpLaunchBudget } from "../src/lib/pump-curve";
 import { HELIUS_RPC_HTTP } from "../src/lib/solana-rpc";
 import { checkGenerateLimit, clientIp } from "./chat-limit";
-import { ensureLaunchSchema, getLaunch, listLaunches, parseLaunchBody, upsertLaunchRecord } from "./db";
+import { ensureLaunchSchema, getLaunch, keepOnlySnakeLaunches, listLaunches, parseLaunchBody, upsertLaunchRecord } from "./db";
 import { getMarketCapCache, overlayMarketCaps, startMarketCapPoller } from "./market-caps";
 
 loadEnv({ path: ".env.local" });
@@ -266,6 +266,7 @@ const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
 const server = app.listen(port, "0.0.0.0", () => {
   console.log(`OCG API listening on ${port}`);
   void ensureLaunchSchema()
+    .then(() => keepOnlySnakeLaunches())
     .then(() => startMarketCapPoller())
     .catch((error: unknown) => {
       console.error("Launch schema failed:", error);

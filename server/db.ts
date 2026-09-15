@@ -2,6 +2,7 @@ import { Pool } from "pg";
 
 import type { Genre } from "../src/lib/constants";
 import { publicPlayUrl, tickerSlug } from "../src/lib/site";
+import { isSnakeLaunch, SEED_LAUNCHES } from "../src/lib/seed-games";
 import type { OcgLaunch } from "../src/lib/types";
 
 type LaunchRow = {
@@ -129,6 +130,35 @@ export async function listLaunches(): Promise<OcgLaunch[]> {
   }
   const result = await db.query<LaunchRow>("SELECT * FROM launches ORDER BY created_at DESC LIMIT 200");
   return result.rows.map(fromRow);
+}
+
+export async function keepOnlySnakeLaunches(): Promise<void> {
+  await ensureLaunchSchema();
+  const db = getPool();
+  if (!db) {
+    for (const [id, item] of memory) {
+      if (!isSnakeLaunch(item)) memory.delete(id);
+    }
+    if (![...memory.values()].some(isSnakeLaunch) && SEED_LAUNCHES[0]) {
+      memory.set(SEED_LAUNCHES[0].id, SEED_LAUNCHES[0]);
+    }
+    return;
+  }
+  await db.query(
+    `DELETE FROM launches
+     WHERE NOT (
+       LOWER(symbol) IN ('snek', 'snake')
+       OR LOWER(name) LIKE '%snake%'
+       OR LOWER(name) LIKE '%snek%'
+       OR LOWER(COALESCE(slug, '')) IN ('snek', 'snake')
+       OR LOWER(COALESCE(prompt, '')) LIKE '%snake%'
+       OR LOWER(COALESCE(prompt, '')) LIKE '%snek%'
+     )`,
+  );
+  const remaining = await listLaunches();
+  if (!remaining.some(isSnakeLaunch) && SEED_LAUNCHES[0]) {
+    await upsertLaunchRecord(SEED_LAUNCHES[0]);
+  }
 }
 
 export async function getLaunch(id: string): Promise<OcgLaunch | null> {

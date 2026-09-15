@@ -12,32 +12,8 @@ export type { StudioChatMessage };
 
 const STARTERS = [
   {
-    label: "Orbit Cat",
-    prompt: "A one-button dodge game where a cat weaves through falling moons",
-  },
-  {
-    label: "Tiny RPG",
-    prompt: "Top-down pixel RPG: overworld, three dungeons, sword combat, NPCs with shops",
-  },
-  {
-    label: "Chess",
-    prompt: "Playable chess with legal moves, check, checkmate, and a greedy AI opponent",
-  },
-  {
-    label: "Tycoon",
-    prompt: "Idle lemonade tycoon: buy stands, upgrades, and watch cash grow",
-  },
-  {
-    label: "Card Duel",
-    prompt: "Turn-based card battler: draw, energy, minions, and a boss across the table",
-  },
-  {
-    label: "Farm Plot",
-    prompt: "Tiny farming sim: plant, water, harvest, sell, and expand the plot",
-  },
-  {
-    label: "DOOM",
-    prompt: "Doom — first person corridors, shotgun, demons",
+    label: "Neon Snake",
+    prompt: "Neon snake in a shrinking box — eat bits, don't hit the tail",
   },
 ];
 
