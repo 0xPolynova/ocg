@@ -11,7 +11,7 @@ import { RomCabinet } from "@/components/rom-cabinet";
 import { SiteHeader } from "@/components/site-header";
 import { WalletButton } from "@/components/wallet-ui";
 import { apiUrl } from "@/lib/api";
-import { STUDIO_MAX_DRAFTS } from "@/lib/constants";
+import { STUDIO_MAX_DRAFTS, CHAT_COOLDOWN_MS, CHAT_MAX_USER_MESSAGES } from "@/lib/constants";
 import { utf8Bytes } from "@/lib/game-codec";
 import { upsertLaunch, fetchLaunch } from "@/lib/launches-store";
 import {
@@ -26,11 +26,13 @@ import { allocatePlaySlug, publicPlayUrl, tickerSlug } from "@/lib/site";
 import {
   draftTabLabel,
   emptyDraft,
+  isChatCapped,
   isDraftLocked,
   readStudioCache,
   type StudioCache,
   type StudioChatMessage,
   type StudioDraft,
+  userPromptCount,
   writeStudioCache,
 } from "@/lib/studio-store";
 import { dataUrlToPngFile } from "@/lib/token-art";
@@ -120,6 +122,15 @@ export function CreateStudio() {
     if (!draft || isDraftLocked(draft) || busyRef.current[draft.id]) return;
     const trimmed = text.trim();
     if (trimmed.length < 3) return;
+    if (userPromptCount(draft) >= CHAT_MAX_USER_MESSAGES) {
+      setError(`This game used all ${CHAT_MAX_USER_MESSAGES} prompts. Open a new tab.`);
+      return;
+    }
+    if (draft.lastPromptAt && Date.now() - draft.lastPromptAt < CHAT_COOLDOWN_MS) {
+      const wait = Math.ceil((CHAT_COOLDOWN_MS - (Date.now() - draft.lastPromptAt)) / 1000);
+      setError(`Wait ${wait}s before sending another prompt.`);
+      return;
+    }
     const draftId = draft.id;
     const userMessage: StudioChatMessage = {
       id: crypto.randomUUID(),
@@ -127,7 +138,7 @@ export function CreateStudio() {
       content: trimmed,
     };
     const history = [...draft.messages, userMessage];
-    patchDraft(draftId, { messages: history, composer: "" });
+    patchDraft(draftId, { messages: history, composer: "", lastPromptAt: Date.now() });
     busyRef.current = { ...busyRef.current, [draftId]: "generate" };
     setBusyById((current) => ({ ...current, [draftId]: "generate" }));
     setError(null);
@@ -391,8 +402,10 @@ export function CreateStudio() {
               onDraftChange={(value) => patchDraft(active.id, { composer: value })}
               onSend={(text) => void send(text)}
               thinking={generating}
-              disabled={busy === "launch" || locked}
+              disabled={busy === "launch" || locked || isChatCapped(active)}
               locked={locked}
+              lastPromptAt={active.lastPromptAt}
+              userPromptCount={userPromptCount(active)}
             />
 
             <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card">

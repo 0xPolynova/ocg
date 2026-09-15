@@ -2,8 +2,9 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, LoaderCircle, Lock } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { CHAT_COOLDOWN_MS, CHAT_MAX_USER_MESSAGES } from "@/lib/constants";
 import type { StudioChatMessage } from "@/lib/studio-store";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +49,8 @@ export function GamePromptChat({
   thinking,
   disabled,
   locked,
+  lastPromptAt,
+  userPromptCount,
 }: {
   messages: StudioChatMessage[];
   draft: string;
@@ -56,9 +59,16 @@ export function GamePromptChat({
   thinking: boolean;
   disabled: boolean;
   locked?: boolean;
+  lastPromptAt?: number;
+  userPromptCount: number;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
+  const [now, setNow] = useState(() => Date.now());
   const empty = messages.length === 0 && !thinking;
+  const waitMs = lastPromptAt ? Math.max(0, lastPromptAt + CHAT_COOLDOWN_MS - now) : 0;
+  const waitSec = Math.ceil(waitMs / 1000);
+  const capped = userPromptCount >= CHAT_MAX_USER_MESSAGES;
+  const blocked = disabled || thinking || locked || capped || waitMs > 0;
 
   useEffect(() => {
     const node = scroller.current;
@@ -66,23 +76,33 @@ export function GamePromptChat({
     node.scrollTop = node.scrollHeight;
   }, [messages, thinking]);
 
+  useEffect(() => {
+    if (!lastPromptAt || waitMs <= 0) return;
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, [lastPromptAt, waitMs]);
+
   function submit() {
     const text = draft.trim();
-    if (disabled || thinking || locked || text.length < 3) return;
+    if (blocked || text.length < 3) return;
     onSend(text);
   }
+
+  const hint = locked
+    ? "Launched — this build is locked."
+    : capped
+      ? `Used all ${CHAT_MAX_USER_MESSAGES} prompts. Open a new tab.`
+      : empty
+        ? "Prompt, then iterate. One message every 30s · 10 per game."
+        : waitMs > 0
+          ? `Wait ${waitSec}s · ${userPromptCount}/${CHAT_MAX_USER_MESSAGES} prompts`
+          : `${userPromptCount}/${CHAT_MAX_USER_MESSAGES} prompts used`;
 
   return (
     <section className="flex h-full min-h-0 flex-col rounded-2xl border border-border bg-card">
       <div className="shrink-0 border-b border-border px-3 py-1.5">
         <h2 className="text-sm font-medium">Game chat</h2>
-        <p className="text-xs text-muted-foreground">
-          {locked
-            ? "Launched — this build is locked."
-            : empty
-              ? "Prompt, then iterate. Chat and the current build stay in this tab."
-              : "Ask for changes. This tab keeps the current game."}
-        </p>
+        <p className="text-xs text-muted-foreground">{hint}</p>
       </div>
 
       <div ref={scroller} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2">
@@ -92,7 +112,7 @@ export function GamePromptChat({
               <button
                 key={idea.label}
                 type="button"
-                disabled={disabled || thinking}
+                disabled={blocked}
                 onClick={() => onDraftChange(idea.prompt)}
                 className="rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground hover:border-primary/40 hover:text-foreground disabled:opacity-50"
               >
@@ -143,6 +163,11 @@ export function GamePromptChat({
           <Lock className="size-3.5 shrink-0" />
           Token is live. Chat and the game HTML cannot change.
         </div>
+      ) : capped ? (
+        <div className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2 text-xs text-muted-foreground">
+          <Lock className="size-3.5 shrink-0" />
+          {CHAT_MAX_USER_MESSAGES} prompt limit reached. Open a new tab to make another game.
+        </div>
       ) : (
         <form
           className="shrink-0 border-t border-border p-2"
@@ -167,11 +192,17 @@ export function GamePromptChat({
             />
             <button
               type="submit"
-              disabled={disabled || thinking || draft.trim().length < 3}
+              disabled={blocked || draft.trim().length < 3}
               className="mb-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40"
-              aria-label={empty ? "Generate game" : "Send"}
+              aria-label={waitMs > 0 ? `Wait ${waitSec}s` : empty ? "Generate game" : "Send"}
             >
-              {thinking ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
+              {thinking ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : waitMs > 0 ? (
+                <span className="text-[10px] font-semibold">{waitSec}</span>
+              ) : (
+                <ArrowUp className="size-4" />
+              )}
             </button>
           </div>
         </form>

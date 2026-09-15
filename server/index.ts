@@ -9,6 +9,7 @@ import { generateGameFromChat } from "../src/lib/generate-game";
 import { buildMintSignedPumpCreateTx } from "../src/lib/pump-create-tx";
 import { HELIUS_RPC_HTTP } from "../src/lib/solana-rpc";
 import type { PumpCoinStats } from "../src/lib/types";
+import { checkGenerateLimit, clientIp } from "./chat-limit";
 import { ensureLaunchSchema, getLaunch, listLaunches, parseLaunchBody, upsertLaunchRecord } from "./db";
 
 loadEnv({ path: ".env.local" });
@@ -105,6 +106,12 @@ app.post("/api/generate-game", async (req, res) => {
   const name = typeof req.body?.name === "string" ? req.body.name : undefined;
   const symbol = typeof req.body?.symbol === "string" ? req.body.symbol : undefined;
   const mechanic = typeof req.body?.mechanic === "string" ? req.body.mechanic : undefined;
+  const limit = checkGenerateLimit({ ip: clientIp(req), prompt, messages });
+  if (!limit.ok) {
+    if (limit.retryAfter) res.setHeader("Retry-After", String(limit.retryAfter));
+    res.status(limit.status).json({ error: limit.error, retryAfter: limit.retryAfter });
+    return;
+  }
   const result = await generateGameFromChat({ prompt, messages, html, name, symbol, mechanic });
   res.status(result.status).json(result.body);
 });

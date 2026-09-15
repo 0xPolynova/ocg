@@ -1,4 +1,4 @@
-import { STUDIO_ACTIVE_KEY, STUDIO_MAX_DRAFTS, STUDIO_STORAGE_KEY } from "@/lib/constants";
+import { CHAT_COOLDOWN_MS, CHAT_MAX_USER_MESSAGES, STUDIO_ACTIVE_KEY, STUDIO_MAX_DRAFTS, STUDIO_STORAGE_KEY } from "@/lib/constants";
 import type { GenerateGameResponse } from "@/lib/types";
 
 export type StudioChatMessage = {
@@ -25,6 +25,7 @@ export type StudioDraft = {
   mayhemMode: boolean;
   buyMode: "pct" | "sol";
   solBuy: number;
+  lastPromptAt?: number;
   mint?: string;
   createSignature?: string;
 };
@@ -71,6 +72,19 @@ export function isDraftLocked(draft: StudioDraft): boolean {
   return Boolean(draft.mint || draft.createSignature);
 }
 
+export function userPromptCount(draft: StudioDraft): number {
+  return draft.messages.filter((item) => item.role === "user").length;
+}
+
+export function chatCooldownRemaining(draft: StudioDraft, now = Date.now()): number {
+  if (!draft.lastPromptAt) return 0;
+  return Math.max(0, draft.lastPromptAt + CHAT_COOLDOWN_MS - now);
+}
+
+export function isChatCapped(draft: StudioDraft): boolean {
+  return userPromptCount(draft) >= CHAT_MAX_USER_MESSAGES;
+}
+
 export function draftTabLabel(draft: StudioDraft): string {
   const ticker = draft.symbol.trim();
   if (ticker) return ticker.toUpperCase();
@@ -105,6 +119,7 @@ function parseDraft(value: unknown): StudioDraft | null {
     mayhemMode: Boolean(item.mayhemMode),
     buyMode: item.buyMode === "pct" ? "pct" : "sol",
     solBuy: typeof item.solBuy === "number" ? item.solBuy : 0,
+    lastPromptAt: typeof item.lastPromptAt === "number" ? item.lastPromptAt : undefined,
     mint: typeof item.mint === "string" ? item.mint : undefined,
     createSignature: typeof item.createSignature === "string" ? item.createSignature : undefined,
   };
