@@ -18,6 +18,9 @@ export const NOOP_PROGRAM_ID = "noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV";
 
 export const OCG_MAGIC = "OCG1";
 export const STORAGE_KEY = "ocg:launches";
+export const STUDIO_STORAGE_KEY = "ocg:studio-drafts";
+export const STUDIO_ACTIVE_KEY = "ocg:studio-active";
+export const STUDIO_MAX_DRAFTS = 16;
 /** V1 instruction-data budget per tx (4096 − 182-byte envelope). */
 export const CHUNK_DATA_BYTES = 3914;
 /** Legacy / v0 txs still max out at 1232 bytes on the wire. */
