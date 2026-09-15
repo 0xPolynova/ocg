@@ -114,6 +114,26 @@ onclick=()=>{if(!st){st=1;beep(660,.08);return}if(!g){g=1;s=0;row=0;px=W/2;beep(
 L()
 </script>`;
 
+const DOOM = `<!doctype html><meta charset=utf-8><body style="margin:0;background:#041014;overflow:hidden"><canvas id=c></canvas><script>
+ctx=c.getContext('2d');W=c.width=innerWidth;H=c.height=innerHeight
+S='1111111110000001101111011010000110111101100000011011110111111111';mw=8;px=1.5;py=1.5;pa=0;s=0;best=0;st=0;g=1;hp=100;en=[{x:4.5,y:4.5,l:1},{x:6.2,y:2.4,l:1}]
+K={};onkeydown=e=>K[e.key]=1;onkeyup=e=>K[e.key]=0
+function wall(x,y){return S[(y|0)*mw+(x|0)]==='1'}
+function go(nx,ny){if(!wall(nx,py))px=nx;if(!wall(px,ny))py=ny}
+function L(){
+if(st&&g){let sp=.055;if(K.w||K.ArrowUp)go(px+Math.cos(pa)*sp,py+Math.sin(pa)*sp);if(K.s||K.ArrowDown)go(px-Math.cos(pa)*sp,py-Math.sin(pa)*sp);if(K.a)go(px+Math.cos(pa-1.57)*sp,py+Math.sin(pa-1.57)*sp);if(K.d)go(px+Math.cos(pa+1.57)*sp,py+Math.sin(pa+1.57)*sp);if(K.ArrowLeft)pa-=.05;if(K.ArrowRight)pa+=.05}
+ctx.fillStyle='#041014';ctx.fillRect(0,0,W,H/2);ctx.fillStyle='#1c1010';ctx.fillRect(0,H/2,W,H/2)
+if(!st){ctx.fillStyle='#e8fbff';ctx.font='bold 28px monospace';ctx.fillText('DOOM',24,56);ctx.font='14px monospace';ctx.fillText('WASD move · arrows turn · click shoot',24,82)}
+else{for(let col=0;col<W;col+=3){let ra=pa-0.55+col/W*1.1,d=0,hit=0,cx=Math.cos(ra),cy=Math.sin(ra);while(d<14&&!hit){d+=.06;if(wall(px+cx*d,py+cy*d))hit=1}let h=Math.min(H,(H*0.9)/(d*.85));ctx.fillStyle=d<3?'#8fd4de':d<7?'#3d6a70':'#163033';ctx.fillRect(col,(H-h)/2,3,h)}
+if(g){en.forEach(o=>{if(!o.l)return;let dx=o.x-px,dy=o.y-py,dist=Math.hypot(dx,dy),ang=Math.atan2(dy,dx)-pa;while(ang>Math.PI)ang-=6.28;while(ang<-Math.PI)ang+=6.28;if(Math.abs(ang)<0.7&&dist>0.35){let sz=Math.min(220,280/dist),sx=W/2+ang*W;ctx.fillStyle='#f07178';ctx.fillRect(sx-sz/4,(H-sz)/2,sz/2,sz);if(dist<0.7){hp--;shake(5);if(hp<=0){g=0;best=Math.max(best,s);beep(90,.2)}}}})
+ctx.fillStyle='#8fd4de';ctx.beginPath();ctx.moveTo(W*.42,H);ctx.lineTo(W/2,H-88);ctx.lineTo(W*.58,H);ctx.fill();ctx.fillStyle='#3ddc8e';ctx.font='bold 18px monospace';ctx.fillText('HP '+hp+'  KILLS '+s+'  best '+best,16,28)}
+else{ctx.fillStyle='#e8fbff';ctx.font='bold 26px monospace';ctx.fillText('RIP  '+s,24,56);ctx.font='14px monospace';ctx.fillText('best '+best+'  click',24,82)}}
+requestAnimationFrame(L)}
+function shoot(){if(!g||!st)return;beep(160,.08);shake(4);en.forEach(o=>{if(!o.l)return;let ang=Math.atan2(o.y-py,o.x-px)-pa;while(ang>Math.PI)ang-=6.28;while(ang<-Math.PI)ang+=6.28;if(Math.abs(ang)<.14&&Math.hypot(o.x-px,o.y-py)<9){o.l=0;s++;burst(W/2,H/2,'#f07178',16);beep(880,.05)}})}
+onclick=()=>{if(!st){st=1;beep(660,.08);return}if(!g){g=1;s=0;hp=100;px=1.5;py=1.5;pa=0;en=[{x:4.5,y:4.5,l:1},{x:6.2,y:2.4,l:1}];beep(520,.06);return}shoot()}
+L()
+</script>`;
+
 function launch(
   partial: Omit<OcgLaunch, "gameBytes" | "compressedBytes" | "storeSignatures" | "sparkline"> & {
     sparkline?: number[];
@@ -220,10 +240,27 @@ export const SEED_LAUNCHES: OcgLaunch[] = [
     change24h: -1.4,
     sparkline: [9, 9, 10, 9, 11, 10, 12, 11, 13, 12, 14, 13],
   }),
+  launch({
+    id: "seed-doom",
+    name: "Doom",
+    symbol: "DOOM",
+    description: "First-person corridors. Shotgun the demons.",
+    prompt: "Doom first person corridors shotgun demons",
+    genre: "Action",
+    gameHtml: DOOM,
+    demo: true,
+    createdAt: Date.UTC(2026, 8, 14),
+    marketCapUsd: 12_400_000,
+    volumeUsd: 640_000,
+    change24h: 22.1,
+    sparkline: [4, 5, 6, 8, 7, 10, 12, 11, 14, 18, 17, 21],
+  }),
 ];
 
 export function fallbackGame(prompt: string): { html: string; name: string; symbol: string } {
   switch (pickMechanic(prompt)) {
+    case "fps":
+      return { html: DOOM, name: "Doom", symbol: "DOOM" };
     case "snake":
       return { html: SNAKE, name: "Neon Snake", symbol: "SNEK" };
     case "flappy":

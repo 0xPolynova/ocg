@@ -62,6 +62,9 @@ export function CreateStudio() {
     setBusy("generate");
     setError(null);
     setStatus(null);
+    setGame(null);
+    setName("");
+    setSymbol("");
     try {
       const response = await fetch(apiUrl("/api/generate-game"), {
         method: "POST",
@@ -451,6 +454,10 @@ const PROMPTS = [
   {
     label: "Memory Pulse",
     prompt: "Simon-style memory game: repeat the glowing pad sequence",
+  },
+  {
+    label: "DOOM",
+    prompt: "Doom — first person corridors, shotgun, demons",
   },
 ];
 

@@ -6,11 +6,13 @@ import {
 } from "./constants";
 import { compressGame, utf8Bytes } from "./game-codec";
 import {
+  famousGame,
   followsTheme,
   genreFromMechanic,
   hasMechanicSignals,
   isGenericDodgeReskin,
   MECHANIC_RECIPES,
+  normalizeIdea,
   parsePlan,
   pickMechanic,
   tickerFromPlan,
@@ -20,39 +22,41 @@ import { extractHtml } from "./minify-game";
 import { fallbackGame } from "./seed-games";
 import type { GenerateGameResponse } from "./types";
 
-const PLAN_PROMPT = `You are a game director. Turn a one-line idea into a unique micro-arcade design.
+const PLAN_PROMPT = `You are a game director. Turn the player's idea into a micro-arcade that IS that idea.
 Return ONLY JSON:
-{"title":"SHOUTY TITLE","mechanic":"snake|flappy|shooter|platformer|frogger|pong|breakout|dodge|collector|maze|rhythm|aim|stacker|runner|memory|custom","controls":"how you play","player":"what the player looks like","hazards":"what hurts/blocks","goal":"how score increases","fail":"how you die","unique":"one twist that is not mouse-dodge falling blobs","mustDraw":["visual A","visual B"],"hint":"one-line control hint"}
+{"title":"SHOUTY TITLE","mechanic":"fps|snake|flappy|shooter|platformer|frogger|pong|breakout|dodge|collector|maze|rhythm|aim|stacker|runner|memory|custom","controls":"how you play","player":"what the player looks like","hazards":"what hurts/blocks","goal":"how score increases","fail":"how you die","unique":"the camera + loop that match the idea","mustDraw":["visual A","visual B"],"hint":"one-line control hint"}
 Rules:
-- mechanic MUST match the user's verbs. snake→snake, shoot→shooter, hop/frog/logs→frogger, flap→flappy, stack→stacker, maze→maze.
-- NEVER pick dodge unless the user asked to dodge/avoid/weave.
-- title and mustDraw must use nouns from the prompt (cat, moon, frog, asteroid…).
-- unique must change the FEEL, not just the sprite colors.`;
+- If they named a famous game, clone its CAMERA: Doom/Wolfenstein = fps raycaster. Mario = side platformer. Tetris = stacker. Pac-Man = maze. Flappy = flap. Snake = snake.
+- NEVER pick snake, dodge, or pong unless the idea actually is that game.
+- title MUST contain the idea's main noun (DOOM if they said doom).`;
 
 function implementPrompt(plan: GamePlan, idea: string): string {
+  const known = famousGame(idea);
   return `You are a senior Flash arcade coder. Write ONE HTML5 canvas game. Output ONLY HTML.
 
 HARD CAP: ${TARGET_RAW_BYTES} characters. No markdown, fences, comments, URLs, images, libraries.
 
-USER IDEA (obey literally): ${idea}
+THE PLAYER TYPED: "${idea}"
+That sentence IS the game. If they said Doom, the camera is first-person corridors with a gun — not snake, not dodge, not pong.
+${known ? `FAMOUS-GAME LOCK: ${known.brief}` : ""}
 
 LOCKED DESIGN:
 ${JSON.stringify(plan)}
 
-MECHANIC RECIPE — implement this loop, not some other genre:
+MECHANIC RECIPE — this loop only:
 ${MECHANIC_RECIPES[plan.mechanic]}
 
 Runtime already injected (CALL, do not redefine): beep(freq,sec) burst(x,y,color,n) shake(px)
-Canvas id=c, 2d context is ctx. Player coords px/py if needed. NEVER put the context in x,y,w,h,p,s,t,e,n.
+Canvas id=c, 2d context is ctx. NEVER store the context in x,y,w,h,p,s,t,e,n.
 
 Rules:
 1. fillText the exact title "${plan.title}" on the title screen. Hint: ${plan.hint}
-2. Draw ${plan.player} and ${plan.hazards} as recognizable geometry (ears, tails, logs, ships, crescents — not identical circles).
-3. TITLE → PLAY → GAME OVER with score + best. Juice: beep/burst/shake on start, score, death. Difficulty ramps.
-4. Palette: bg #041014, player #8fd4de, good #3ddc8e, bad #f07178, accent #f8d36a, text #e8fbff. HUD 18px monospace.
-5. requestAnimationFrame. Pointer + keyboard as specified in controls.
-FORBIDDEN: mouse-lerp dodge with falling ents[] unless mechanic is dodge or collector. That reskin is a failed output.
-Build ${plan.mechanic} for "${idea}".`;
+2. Draw ${plan.player} and ${plan.hazards} so a stranger would recognize the idea.
+3. TITLE → PLAY → GAME OVER with score + best. Juice: beep/burst/shake. Difficulty ramps.
+4. Palette: bg #041014, player #8fd4de, good #3ddc8e, bad #f07178, accent #f8d36a, text #e8fbff.
+5. requestAnimationFrame. Controls: ${plan.controls}
+FORBIDDEN: ignoring the typed idea; swapping in snake/dodge because they are easier.
+Build "${idea}" as ${plan.mechanic}.`;
 }
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
@@ -141,8 +145,9 @@ export async function generateGameFromPrompt(prompt: string): Promise<{
   const apiKey = process.env.OPENROUTER_API_KEY;
   const planModel = process.env.OPENROUTER_MODEL ?? OPENROUTER_MODEL_DEFAULT;
   const codeModel = process.env.OPENROUTER_CODE_MODEL ?? OPENROUTER_CODE_MODEL_DEFAULT;
-  const hinted = pickMechanic(trimmed);
-  const localPlan: GamePlan = parsePlan("{}", trimmed);
+  const idea = normalizeIdea(trimmed);
+  const hinted = pickMechanic(idea);
+  const localPlan: GamePlan = parsePlan("{}", idea);
   localPlan.mechanic = hinted;
 
   if (!apiKey) {
@@ -155,37 +160,44 @@ export async function generateGameFromPrompt(prompt: string): Promise<{
   }
 
   try {
-    const planned = await withModelFallback(
-      apiKey,
-      planModel,
-      OPENROUTER_MODEL_DEFAULT,
-      [
-        { role: "system", content: PLAN_PROMPT },
-        {
-          role: "user",
-          content: `Idea: ${trimmed}\nPreferred mechanic if it fits: ${hinted}. Do not ignore the idea's nouns and verbs.`,
-        },
-      ],
-      { temperature: 0.4, maxTokens: 500 },
-    );
-    const plan = parsePlan(planned.text, trimmed);
-    if (hinted !== "custom" && plan.mechanic === "dodge" && hinted !== "dodge") {
-      plan.mechanic = hinted;
+    const known = famousGame(idea);
+    let plan: GamePlan;
+    if (known) {
+      plan = parsePlan("{}", idea);
+    } else {
+      const planned = await withModelFallback(
+        apiKey,
+        planModel,
+        OPENROUTER_MODEL_DEFAULT,
+        [
+          { role: "system", content: PLAN_PROMPT },
+          {
+            role: "user",
+            content: `The player typed: "${trimmed}"\nNormalized idea: "${idea}"\nIf a mechanic is obvious use ${hinted}. Do not replace their idea with snake or dodge.`,
+          },
+        ],
+        { temperature: 0.3, maxTokens: 500 },
+      );
+      plan = parsePlan(planned.text, idea);
     }
+    if (hinted !== "custom") plan.mechanic = hinted;
 
     const build = async (strict = false) => {
       const extra = strict
-        ? `\nPREVIOUS OUTPUT WAS A GENERIC MOUSE-DODGE RESKIN. Rewrite from scratch as ${plan.mechanic}. Title fillText MUST be "${plan.title}". Draw ${plan.mustDraw.join(", ")}. Follow the recipe.`
+        ? `\nYOU BUILT THE WRONG GAME. The player asked for "${idea}". Rewrite from scratch as ${plan.mechanic}. Title fillText MUST be "${plan.title}". ${known?.brief ?? ""}`
         : "";
       const made = await withModelFallback(
         apiKey,
         codeModel,
         planModel,
         [
-          { role: "system", content: implementPrompt(plan, trimmed) + extra },
-          { role: "user", content: `Code the ${plan.mechanic} game now. Output ONLY HTML.` },
+          { role: "system", content: implementPrompt(plan, idea) + extra },
+          {
+            role: "user",
+            content: `Code "${idea}" now as ${plan.mechanic}. Output ONLY HTML. If this is not recognizably "${idea}", you failed.`,
+          },
         ],
-        { temperature: strict ? 0.25 : 0.7, maxTokens: 4096 },
+        { temperature: strict ? 0.2 : 0.45, maxTokens: 4096 },
       );
       return { html: extractHtml(made.text), model: made.model };
     };
@@ -197,7 +209,7 @@ export async function generateGameFromPrompt(prompt: string): Promise<{
     const badFit =
       isGenericDodgeReskin(html, plan.mechanic) ||
       !hasMechanicSignals(html, plan.mechanic) ||
-      !followsTheme(html, plan, trimmed);
+      !followsTheme(html, plan, idea);
 
     if (badFit) {
       made = await build(true);
@@ -212,7 +224,7 @@ export async function generateGameFromPrompt(prompt: string): Promise<{
         codeModel,
         planModel,
         [
-          { role: "system", content: implementPrompt(plan, trimmed) },
+          { role: "system", content: implementPrompt(plan, idea) },
           { role: "assistant", content: html },
           {
             role: "user",
