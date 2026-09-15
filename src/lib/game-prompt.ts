@@ -67,7 +67,7 @@ WHAT "FINISHED" MEANS (all required)
 
 BUDGET
 - Write at least ${TARGET_RAW_BYTES} characters of HTML/JS. Short output is a failed game. Keep adding sprite functions, rooms, and juice until you hit that size.
-- No external URLs, images, fonts, or libraries.
+- No external URLs, images, fonts, or libraries. Keep best in a variable named best; localStorage is already stubbed.
 - Palette: bg #041014, player #8fd4de, good #3ddc8e, bad #f07178, accent #f8d36a, text #e8fbff.
 
 Build "${idea}" as a real ${plan.mechanic} game with a ${plan.camera} camera.`;
