@@ -266,15 +266,16 @@ export async function buildMintSignedPumpCreateTx(args: {
     recentBlockhash: blockhash,
     instructions,
   });
+  const compiled = message.compileToV0Message([alt]);
+  const forSim = new VersionedTransaction(compiled);
+  forSim.sign([args.mintKeypair]);
   const withoutAlt = new VersionedTransaction(message.compileToV0Message());
   withoutAlt.sign([args.mintKeypair]);
-  const transaction = new VersionedTransaction(message.compileToV0Message([alt]));
-  transaction.sign([args.mintKeypair]);
 
   const simulation = await simulatePumpTxVerbose({
     connection: args.connection,
-    transaction,
-    label: "server Helius (mint-signed, wallet unsigned)",
+    transaction: forSim,
+    label: "server Helius (mint-signed sim, wallet unsigned)",
     sigVerify: false,
     sizeWithoutAlt: withoutAlt.serialize().length,
   });
@@ -283,5 +284,7 @@ export async function buildMintSignedPumpCreateTx(args: {
     throw new Error(`Pump create simulation failed: ${logs}`);
   }
 
+  // Phantom: multi-signer txs must reach the wallet UNSIGNED. We sign mint after Phantom.
+  const transaction = new VersionedTransaction(compiled);
   return { transaction, blockhash, lastValidBlockHeight, tokenAmount, solLamports, simulation };
 }

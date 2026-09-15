@@ -1,12 +1,6 @@
 import type { Adapter, StandardWalletAdapter } from "@solana/wallet-adapter-base";
-import {
-  SolanaSignAndSendTransaction,
-  SolanaSignTransaction,
-  type SolanaSignAndSendTransactionFeature,
-  type SolanaSignTransactionFeature,
-} from "@solana/wallet-standard-features";
-import { Connection, PublicKey, VersionedTransaction } from "@solana/web3.js";
-import bs58 from "bs58";
+import { SolanaSignTransaction, type SolanaSignTransactionFeature } from "@solana/wallet-standard-features";
+import { Connection, Keypair, PublicKey, VersionedTransaction } from "@solana/web3.js";
 
 import { apiUrl } from "@/lib/api";
 import {
@@ -22,11 +16,6 @@ type WalletSender = {
   publicKey: PublicKey | null;
   wallet?: { adapter: Adapter } | null;
   signTransaction?: (transaction: VersionedTransaction) => Promise<VersionedTransaction>;
-  sendTransaction?: (
-    transaction: VersionedTransaction,
-    connection: Connection,
-    options?: { skipPreflight?: boolean; maxRetries?: number; preflightCommitment?: "processed" | "confirmed" | "finalized" },
-  ) => Promise<string>;
 };
 
 function compactMetadataUri(uri: string): string {
@@ -53,39 +42,12 @@ function isStandardAdapter(adapter: Adapter | undefined | null): adapter is Stan
   return Boolean(adapter && "standard" in adapter && adapter.standard === true && "wallet" in adapter);
 }
 
-async function signAndSendViaWallet(args: {
-  adapter?: Adapter | null;
-  sendTransaction?: WalletSender["sendTransaction"];
-  connection: Connection;
-  transaction: VersionedTransaction;
-}): Promise<string | null> {
-  if (isStandardAdapter(args.adapter)) {
-    const std = args.adapter.wallet;
-    const account = std.accounts[0];
-    if (!account) throw new Error("Connect a wallet first.");
-    if (SolanaSignAndSendTransaction in std.features) {
-      console.info("[OCG pump] sending via wallet-standard solana:signAndSendTransaction chain=solana:mainnet");
-      const [output] = await (std.features as SolanaSignAndSendTransactionFeature)[
-        SolanaSignAndSendTransaction
-      ].signAndSendTransaction({
-        account,
-        chain: "solana:mainnet",
-        transaction: args.transaction.serialize(),
-        options: { skipPreflight: false, maxRetries: 8, commitment: "confirmed" },
-      });
-      if (!output?.signature?.length) throw new Error("Wallet did not return a transaction signature.");
-      return bs58.encode(output.signature);
-    }
+function withEmptySignatures(transaction: VersionedTransaction): VersionedTransaction {
+  const copy = VersionedTransaction.deserialize(transaction.serialize());
+  for (let i = 0; i < copy.signatures.length; i += 1) {
+    copy.signatures[i] = new Uint8Array(64);
   }
-  if (args.sendTransaction) {
-    console.info("[OCG pump] sending via adapter.sendTransaction (wallet-owned send)");
-    return args.sendTransaction(args.transaction, args.connection, {
-      skipPreflight: false,
-      maxRetries: 8,
-      preflightCommitment: "confirmed",
-    });
-  }
-  return null;
+  return copy;
 }
 
 async function signMainnetVersionedTx(args: {
@@ -198,22 +160,25 @@ export async function createPumpToken(args: {
     throw new Error(json.error ?? "Could not build the Pump.fun create transaction.");
   }
 
-  const tx = VersionedTransaction.deserialize(bytesFromBase64(json.transaction));
+  const mintKeypair = Keypair.fromSecretKey(args.mintSecretKey);
+  const tx = withEmptySignatures(VersionedTransaction.deserialize(bytesFromBase64(json.transaction)));
   const before = inspectPumpTx(tx);
-  console.info("[OCG pump] deserialized mint-signed tx", {
+  console.info("[OCG pump] wallet-bound unsigned tx (Phantom signs first)", {
     mint: json.mint,
     buyLamports: json.buyLamports,
     buyTokens: json.buyTokens,
     ...before,
   });
-  if (!before.mintSigned) {
-    throw new Error("Create transaction is missing the mint signature.");
+  if (before.feePayerSigned || before.mintSigned) {
+    throw new Error("Create transaction must reach Phantom unsigned.");
   }
 
   const connection = new Connection(HELIUS_RPC_HTTP, { commitment: "confirmed" });
+  const forSim = VersionedTransaction.deserialize(tx.serialize());
+  forSim.sign([mintKeypair]);
   const clientSim = await simulatePumpTxVerbose({
     connection,
-    transaction: tx,
+    transaction: forSim,
     label: "browser Helius before wallet sign",
     sigVerify: false,
     sizeWithoutAlt: json.simulation?.sizeWithoutAlt ?? null,
@@ -224,50 +189,34 @@ export async function createPumpToken(args: {
     );
   }
 
-  let signature = await signAndSendViaWallet({
+  // Phantom: 2-signer txs must use signTransaction first, then other signers, then send.
+  // https://docs.phantom.com/developer-powertools/domain-and-transaction-warnings
+  console.info("[OCG pump] Phantom signTransaction first (multi-signer), then mint, then send");
+  const walletSigned = await signMainnetVersionedTx({
     adapter: args.wallet.wallet?.adapter,
-    sendTransaction: args.wallet.sendTransaction,
-    connection,
+    signTransaction: args.wallet.signTransaction,
     transaction: tx,
-  }).catch((error) => {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/reject|cancel|denied|user/i.test(message)) throw error instanceof Error ? error : new Error(message);
-    console.warn("[OCG pump] wallet-owned send failed, falling back to sign-then-send", error);
-    return null;
   });
-
-  if (!signature) {
-    const signed = await signMainnetVersionedTx({
-      adapter: args.wallet.wallet?.adapter,
-      signTransaction: args.wallet.signTransaction,
-      transaction: tx,
-    });
-    const afterSign = inspectPumpTx(signed);
-    console.info("[OCG pump] wallet-signed tx", afterSign);
-    if (!afterSign.feePayerSigned) {
-      throw new Error("Wallet did not sign the Pump.fun transaction.");
-    }
-    if (!afterSign.mintSigned) {
-      throw new Error("Wallet dropped the mint signature. Phantom must keep the extra signer.");
-    }
-
-    const raw = signed.serialize();
-    console.info("[OCG pump] sending raw tx via Helius with preflight", { bytes: raw.length });
-    try {
-      signature = await connection.sendRawTransaction(raw, {
-        skipPreflight: false,
-        maxRetries: 8,
-        preflightCommitment: "confirmed",
-      });
-    } catch (error) {
-      console.warn("[OCG pump] preflight send failed, retrying skipPreflight", error);
-      signature = await connection.sendRawTransaction(raw, {
-        skipPreflight: true,
-        maxRetries: 8,
-        preflightCommitment: "confirmed",
-      });
-    }
+  const afterWallet = inspectPumpTx(walletSigned);
+  console.info("[OCG pump] wallet-signed (mint still unsigned)", afterWallet);
+  if (!afterWallet.feePayerSigned) {
+    throw new Error("Wallet did not sign the Pump.fun transaction.");
   }
+
+  walletSigned.sign([mintKeypair]);
+  const complete = inspectPumpTx(walletSigned);
+  console.info("[OCG pump] mint signature attached after Phantom", complete);
+  if (!complete.feePayerSigned || !complete.mintSigned) {
+    throw new Error("Create transaction is missing a required signature.");
+  }
+
+  const raw = walletSigned.serialize();
+  console.info("[OCG pump] sending via Helius with preflight", { bytes: raw.length });
+  const signature = await connection.sendRawTransaction(raw, {
+    skipPreflight: false,
+    maxRetries: 8,
+    preflightCommitment: "confirmed",
+  });
 
   console.info("[OCG pump] submitted", signature);
   await waitForSignature(connection, signature, json.lastValidBlockHeight);
