@@ -2,7 +2,7 @@ import type { Adapter, StandardWalletAdapter } from "@solana/wallet-adapter-base
 import { SolanaSignTransaction, type SolanaSignTransactionFeature } from "@solana/wallet-standard-features";
 import { Connection, Keypair, PublicKey, VersionedTransaction } from "@solana/web3.js";
 
-import { apiUrl } from "@/lib/api";
+import { apiUrl, readJson } from "@/lib/api";
 import {
   inspectPumpTx,
   logPumpSim,
@@ -133,7 +133,7 @@ export async function uploadPumpMetadata(args: {
   body.append("showName", "true");
 
   const response = await fetch(apiUrl("/api/ipfs"), { method: "POST", body });
-  const json = (await response.json()) as { uri?: string; metadataUri?: string; error?: string; fallback?: boolean };
+  const json = await readJson<{ uri?: string; metadataUri?: string; error?: string; fallback?: boolean }>(response);
   if (!response.ok || (!json.uri && !json.metadataUri)) {
     throw new Error(json.error ?? "Could not upload token metadata.");
   }
@@ -165,7 +165,7 @@ export async function createPumpToken(args: {
       mintSecretKey: Array.from(args.mintSecretKey),
     }),
   });
-  const json = (await response.json()) as {
+  const json = await readJson<{
     transaction?: string;
     mint?: string;
     lastValidBlockHeight?: number;
@@ -173,7 +173,7 @@ export async function createPumpToken(args: {
     buyTokens?: string;
     simulation?: PumpSimReport;
     error?: string;
-  };
+  }>(response);
   if (json.simulation) logPumpSim({ ...json.simulation, label: json.simulation.label || "API simulation" });
   if (!response.ok || !json.transaction || !json.mint || json.lastValidBlockHeight == null) {
     throw new Error(json.error ?? "Could not build the Pump.fun create transaction.");
@@ -249,10 +249,9 @@ export async function fetchPumpStats(mint: string): Promise<PumpCoinStats | null
   try {
     const response = await fetch(apiUrl("/api/market-caps"));
     if (!response.ok) return null;
-    const json = (await response.json()) as Record<
-      string,
-      { marketCapUsd?: number; volumeUsd?: number; change24h?: number }
-    >;
+    const json = await readJson<
+      Record<string, { marketCapUsd?: number; volumeUsd?: number; change24h?: number }>
+    >(response);
     const snap = json[mint];
     if (!snap) return null;
     return {

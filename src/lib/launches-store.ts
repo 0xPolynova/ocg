@@ -1,4 +1,4 @@
-import { apiUrl } from "@/lib/api";
+import { apiUrl, readJson } from "@/lib/api";
 import { STORAGE_KEY } from "@/lib/constants";
 import type { OcgLaunch } from "@/lib/types";
 
@@ -63,7 +63,7 @@ export async function hydrateLaunches(): Promise<OcgLaunch[]> {
       try {
         const response = await fetch(apiUrl("/api/launches"));
         if (!response.ok) return readLaunches();
-        const remote = (await response.json()) as OcgLaunch[];
+        const remote = await readJson<OcgLaunch[]>(response);
         if (!Array.isArray(remote)) return readLaunches();
         writeLaunches(remote);
         return readLaunches();
@@ -98,7 +98,7 @@ export async function fetchLaunch(id: string): Promise<OcgLaunch | null> {
     if (fromCache) return fromCache;
     const response = await fetch(apiUrl(`/api/launches/${encodeURIComponent(id)}`));
     if (!response.ok) return null;
-    const launch = (await response.json()) as OcgLaunch | null;
+    const launch = await readJson<OcgLaunch | null>(response);
     if (!launch?.id) return null;
     writeLaunches(mergeLaunches([launch], readLaunches()));
     return launch;
@@ -117,7 +117,7 @@ export async function upsertLaunch(launch: OcgLaunch): Promise<OcgLaunch[]> {
       body: JSON.stringify(launch),
     }).then(async (response) => {
       if (!response.ok) {
-        const json = (await response.json().catch(() => null)) as { error?: string } | null;
+        const json = await readJson<{ error?: string }>(response).catch(() => null);
         throw new Error(json?.error ?? "Could not save the launch card.");
       }
     });
@@ -131,10 +131,9 @@ export async function fetchMarketCaps(): Promise<Record<string, Partial<OcgLaunc
   try {
     const response = await fetch(apiUrl("/api/market-caps"));
     if (!response.ok) return {};
-    const json = (await response.json()) as Record<
-      string,
-      { marketCapUsd?: number; volumeUsd?: number; change24h?: number }
-    >;
+    const json = await readJson<
+      Record<string, { marketCapUsd?: number; volumeUsd?: number; change24h?: number }>
+    >(response);
     const next: Record<string, Partial<OcgLaunch>> = {};
     for (const [mint, snap] of Object.entries(json ?? {})) {
       next[mint] = {

@@ -11,7 +11,7 @@ import { GamePromptChat } from "@/components/game-prompt-chat";
 import { RomCabinet } from "@/components/rom-cabinet";
 import { SiteHeader } from "@/components/site-header";
 import { WalletButton } from "@/components/wallet-ui";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, readJson } from "@/lib/api";
 import { STUDIO_MAX_DRAFTS, APP_PITCH, CHAT_COOLDOWN_MS, CHAT_MAX_USER_MESSAGES, PUMP_FUN_COIN_URL, SOLSCAN_TOKEN_URL, SOLSCAN_TX_URL } from "@/lib/constants";
 import { utf8Bytes } from "@/lib/game-codec";
 import { upsertLaunch, fetchLaunch } from "@/lib/launches-store";
@@ -160,7 +160,7 @@ export function CreateStudio() {
           mechanic: draft.game?.mechanic,
         }),
       });
-      const json = (await response.json()) as GenerateGameResponse & { error?: string };
+      const json = await readJson<GenerateGameResponse & { error?: string }>(response);
       if (!response.ok && !json.html) throw new Error(json.error ?? "Could not generate a game.");
       const reply =
         json.reply?.trim() ||
