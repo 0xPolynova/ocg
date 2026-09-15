@@ -11,10 +11,14 @@ services:
         value: "24"
       - key: OPENROUTER_MODEL
         value: google/gemini-2.5-flash
+      - key: CORS_ORIGIN
+        value: https://launchocg.com,https://www.launchocg.com
       - key: OPENROUTER_API_KEY
         sync: false
       - key: SOLANA_RPC
         sync: false
+    domains:
+      - api.launchocg.com
 
   - type: web
     name: ocg-web
@@ -22,11 +26,11 @@ services:
     plan: free
     buildCommand: npm ci && npm run build
     startCommand: npm run start:web
+    healthCheckPath: /
     envVars:
       - key: NODE_VERSION
         value: "24"
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: ocg-api
-          envVarKey: RENDER_EXTERNAL_URL
+        value: https://api.launchocg.com
+    domains:
+      - launchocg.com

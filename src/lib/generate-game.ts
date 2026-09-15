@@ -27,7 +27,7 @@ async function complete(apiKey: string, model: string, prompt: string, extra?: s
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://ocg.xyz",
+      "HTTP-Referer": "https://launchocg.com",
       "X-Title": "OCG OnChainGame",
     },
     body: JSON.stringify({

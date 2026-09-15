@@ -33,7 +33,8 @@ app.use(
         allowedOrigins.includes("*") ||
         allowedOrigins.includes(origin) ||
         origin.includes("localhost") ||
-        origin.endsWith(".onrender.com")
+        origin.endsWith(".onrender.com") ||
+        origin.endsWith("launchocg.com")
       ) {
         callback(null, true);
         return;
