@@ -1,23 +1,15 @@
 const DEV_API = "http://localhost:4000";
-const PROD_API = "https://ocg-api.onrender.com";
-const DEAD_API_HOSTS = ["api.launchocg.com"];
+export const PROD_API = "https://ocg-api.onrender.com";
 
-function resolveApiOrigin(fromEnv: string | undefined, fallback: string): string {
-  const value = fromEnv?.replace(/\/$/, "");
-  if (!value) return fallback;
-  try {
-    if (DEAD_API_HOSTS.includes(new URL(value).hostname)) return fallback;
-  } catch {
-    return fallback;
-  }
-  return value;
+function devApiOrigin(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+  return fromEnv || DEV_API;
 }
 
+/** Browser + server fetches to ocg-api. Production always uses Render — never api.launchocg.com. */
 export function publicApiOrigin(): string {
-  if (process.env.NODE_ENV === "development") {
-    return resolveApiOrigin(process.env.NEXT_PUBLIC_API_URL, DEV_API);
-  }
-  return resolveApiOrigin(process.env.NEXT_PUBLIC_API_URL, PROD_API);
+  if (process.env.NODE_ENV === "development") return devApiOrigin();
+  return PROD_API;
 }
 
 export function apiUrl(path: string): string {
@@ -25,11 +17,13 @@ export function apiUrl(path: string): string {
   return `${publicApiOrigin()}${normalized}`;
 }
 
+/** Next.js route handlers proxying to ocg-api. */
 export function backendOrigin(): string {
   if (process.env.NODE_ENV === "development") {
-    return resolveApiOrigin(process.env.API_URL, DEV_API);
+    const fromEnv = process.env.API_URL?.replace(/\/$/, "");
+    return fromEnv || DEV_API;
   }
-  return resolveApiOrigin(process.env.API_URL, PROD_API);
+  return PROD_API;
 }
 
 export async function readJson<T>(response: Response): Promise<T> {
