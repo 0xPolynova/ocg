@@ -1,6 +1,6 @@
 import {
   OPENROUTER_CODE_MODEL_DEFAULT,
-  OPENROUTER_FALLBACK_MODEL,
+  OPENROUTER_FALLBACK_MODELS,
   OPENROUTER_MODEL_DEFAULT,
 } from "./constants";
 import { compressGame, utf8Bytes } from "./game-codec";
@@ -32,28 +32,61 @@ type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
 const CODE_TOKENS = 16000;
 
-const LEGACY_CODE_MODELS = new Set([
-  "qwen/qwen3-coder",
-  "qwen/qwen3-coder-next",
-  "qwen/qwen3-coder-flash",
-  "qwen/qwen3-coder-plus",
-]);
+const BANNED_MODELS = [/^qwen\/qwen3-coder/, /^google\/gemini/];
+
+function isBannedModel(value: string): boolean {
+  return BANNED_MODELS.some((pattern) => pattern.test(value));
+}
 
 function resolveModel(envValue: string | undefined, fallback: string): string {
   const value = envValue?.trim();
-  if (!value || LEGACY_CODE_MODELS.has(value)) return fallback;
+  if (!value || isBannedModel(value) || value.startsWith("deepseek/deepseek-v3.2")) return fallback;
   return value;
 }
 
-async function chat(
+function modelChain(primary: string): string[] {
+  const chain = [primary, ...OPENROUTER_FALLBACK_MODELS];
+  return [...new Set(chain.filter((id) => id && !isBannedModel(id)))];
+}
+
+function asText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map(asText).join("");
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (typeof record.text === "string") return record.text;
+    if (typeof record.content === "string") return record.content;
+  }
+  return "";
+}
+
+function choiceText(choice: {
+  message?: {
+    content?: unknown;
+    reasoning?: unknown;
+    reasoning_content?: unknown;
+  };
+}): string {
+  const message = choice.message;
+  if (!message) return "";
+  return (
+    asText(message.content).trim() ||
+    asText(message.reasoning_content).trim() ||
+    asText(message.reasoning).trim()
+  );
+}
+
+async function chatOne(
   apiKey: string,
   model: string,
   messages: ChatMessage[],
   opts?: { temperature?: number; maxTokens?: number },
-): Promise<string> {
+): Promise<{ text: string; model: string }> {
   const maxTokens = opts?.maxTokens ?? CODE_TOKENS;
+  const fallbacks = modelChain(model).filter((id) => id !== model);
   const thread: ChatMessage[] = [...messages];
   let combined = "";
+  let used = model;
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -66,23 +99,30 @@ async function chat(
       },
       body: JSON.stringify({
         model,
+        models: fallbacks.length ? fallbacks : undefined,
         temperature: opts?.temperature ?? 0.45,
         max_tokens: maxTokens,
+        reasoning: { enabled: false, exclude: true },
         messages: thread,
       }),
     });
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`OpenRouter ${response.status}: ${text.slice(0, 280)}`);
+      throw new Error(`OpenRouter ${model} ${response.status}: ${text.slice(0, 280)}`);
     }
     const data = (await response.json()) as {
-      choices?: { finish_reason?: string; message?: { content?: string } }[];
+      model?: string;
+      choices?: {
+        finish_reason?: string;
+        message?: { content?: unknown; reasoning?: unknown; reasoning_content?: unknown };
+      }[];
     };
     const choice = data.choices?.[0];
-    const content = choice?.message?.content;
-    if (!content) throw new Error("OpenRouter returned an empty reply.");
+    const content = choice ? choiceText(choice) : "";
+    if (!content) throw new Error(`OpenRouter ${data.model ?? model} returned an empty reply.`);
+    used = data.model ?? model;
     combined += content;
-    if (choice.finish_reason !== "length") break;
+    if (choice?.finish_reason !== "length") break;
     thread.push({ role: "assistant", content });
     thread.push({
       role: "user",
@@ -90,24 +130,33 @@ async function chat(
     });
   }
 
-  return combined;
+  return { text: combined, model: used };
 }
 
-async function withModelFallback(
+async function chat(
   apiKey: string,
   primary: string,
-  fallback: string,
   messages: ChatMessage[],
   opts?: { temperature?: number; maxTokens?: number },
 ): Promise<{ text: string; model: string }> {
-  try {
-    const text = await chat(apiKey, primary, messages, opts);
-    return { text, model: primary };
-  } catch (error) {
-    if (primary === fallback) throw error;
-    const text = await chat(apiKey, fallback, messages, opts);
-    return { text, model: fallback };
+  const chain = modelChain(primary);
+  let lastError: Error | undefined;
+  for (const model of chain) {
+    try {
+      const result = await chatOne(apiKey, model, messages, opts);
+      if (result.text.trim()) {
+        if (result.model !== primary) {
+          console.log(JSON.stringify({ event: "openrouter-fallback", requested: primary, used: result.model }));
+        }
+        return result;
+      }
+      lastError = new Error(`${model} returned empty content`);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(JSON.stringify({ event: "openrouter-fail", model, error: lastError.message }));
+    }
   }
+  throw lastError ?? new Error("OpenRouter returned an empty reply.");
 }
 
 function pack(
@@ -209,10 +258,9 @@ export async function generateGameFromChat(input: GenerateGameRequest): Promise<
       plan.mechanic = keepMechanic(input.mechanic, plan.mechanic);
       if (input.name) plan.title = input.name.toUpperCase();
     } else {
-      const planned = await withModelFallback(
+      const planned = await chat(
         apiKey,
         planModel,
-        OPENROUTER_FALLBACK_MODEL,
         [
           { role: "system", content: planSystemPrompt() },
           {
@@ -233,10 +281,9 @@ export async function generateGameFromChat(input: GenerateGameRequest): Promise<
     }
 
     let made = revising
-      ? await withModelFallback(
+      ? await chat(
           apiKey,
           codeModel,
-          OPENROUTER_FALLBACK_MODEL,
           [
             { role: "system", content: reviseSystemPrompt(plan, idea) },
             {
@@ -246,10 +293,9 @@ export async function generateGameFromChat(input: GenerateGameRequest): Promise<
           ],
           { temperature: 0.3, maxTokens: CODE_TOKENS },
         )
-      : await withModelFallback(
+      : await chat(
           apiKey,
           codeModel,
-          OPENROUTER_FALLBACK_MODEL,
           [
             { role: "system", content: implementSystemPrompt(plan, idea) },
             { role: "user", content: implementUserPrompt(plan, idea) },
@@ -262,10 +308,9 @@ export async function generateGameFromChat(input: GenerateGameRequest): Promise<
     for (let pass = 0; pass < 2 && issues.length > 0; pass += 1) {
       console.log(JSON.stringify({ event: "repair-game", pass, mechanic: plan.mechanic, issues }));
       const tooSmall = issues.some((item) => item.includes("too small"));
-      const repaired = await withModelFallback(
+      const repaired = await chat(
         apiKey,
         codeModel,
-        OPENROUTER_FALLBACK_MODEL,
         [
           { role: "system", content: implementSystemPrompt(plan, idea) },
           {

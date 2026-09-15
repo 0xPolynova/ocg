@@ -6,10 +6,14 @@ export const APP_DESCRIPTION = "Build, launch, Play.";
 /** Soft target for generated HTML. One model pass, not a novella. */
 export const TARGET_RAW_BYTES = 18000;
 
-export const OPENROUTER_MODEL_DEFAULT = "deepseek/deepseek-v3.2";
-/** HTML game coder — DeepSeek V3.2, cheap and strong at complete files. */
-export const OPENROUTER_CODE_MODEL_DEFAULT = "deepseek/deepseek-v3.2";
-export const OPENROUTER_FALLBACK_MODEL = "z-ai/glm-5.3-flash";
+export const OPENROUTER_MODEL_DEFAULT = "deepseek/deepseek-v4-flash";
+/** Current cheap DeepSeek coder. V3.2 is a reasoning model and often ships empty HTML. */
+export const OPENROUTER_CODE_MODEL_DEFAULT = "deepseek/deepseek-v4-flash";
+/** Same-family then MiniMax — never Gemini. */
+export const OPENROUTER_FALLBACK_MODELS = [
+  "deepseek/deepseek-v3.2",
+  "minimax/minimax-m2.5",
+] as const;
 
 export const PUMP_FUN_COIN_URL = "https://pump.fun/coin";
 export const SOLSCAN_TOKEN_URL = "https://solscan.io/token";

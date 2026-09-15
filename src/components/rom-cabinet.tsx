@@ -121,6 +121,7 @@ export function RomCabinet({
         <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
           <span className="truncate">
             {game.bytes.toLocaleString()} bytes · {game.mechanic ?? game.genre}
+            {game.model ? ` · ${game.model}` : ""}
           </span>
           <span className={cn(locked ? "text-primary" : game.fallback ? "text-muted-foreground" : "text-positive")}>
             {locked ? "Token live" : game.fallback ? "Fallback ROM" : "Play page"}
