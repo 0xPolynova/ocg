@@ -31,7 +31,8 @@ const _raf=requestAnimationFrame.bind(window);
 requestAnimationFrame=f=>_raf(t=>{if(typeof f==='function')f(t);const c=findCv(),g=c&&c.getContext&&c.getContext('2d');if(g){for(let i=_bits.length;i--;){const p=_bits[i];p.x+=p.vx;p.y+=p.vy;p.vy+=.16;p.l--;g.globalAlpha=Math.max(0,p.l/20);g.fillStyle=p.col;g.fillRect(p.x,p.y,3,3);if(p.l<=0)_bits.splice(i,1)}g.globalAlpha=1}if(c){if(_sh>0.4){c.style.transform='translate('+((Math.random()-.5)*_sh)+'px,'+((Math.random()-.5)*_sh)+'px)'}else{c.style.transform='none'}_sh*=.84}});
 function snapSoon(){let n=0;function tick(){n++;if(n<24){_raf(tick);return}try{const c=findCv();if(!c||c.width<16||c.height<16)return;const s=1000,out=document.createElement('canvas');out.width=s;out.height=s;const g=out.getContext('2d');if(!g)return;g.fillStyle='#041014';g.fillRect(0,0,s,s);const scale=Math.max(s/c.width,s/c.height);const dw=c.width*scale,dh=c.height*scale;g.imageSmoothingEnabled=false;g.drawImage(c,(s-dw)/2,(s-dh)/2,dw,dh);parent.postMessage({type:'ocg-shot',dataUrl:out.toDataURL('image/png')},'*')}catch(err){}}_raf(tick)}
 function whenReady(fn){if(document.readyState==='complete'||document.readyState==='interactive')fn();else document.addEventListener('DOMContentLoaded',fn)}
-whenReady(function(){const c=ensureCv(),b=box();if(b.w>=80&&(!c.width||c.width<16)){c.width=b.w;c.height=b.h}snapSoon()});
+whenReady(function(){const c=ensureCv(),b=box();if(b.w>=80&&(!c.width||c.width<16)){c.width=b.w;c.height=b.h}window.beep=beep;window.burst=burst;window.shake=shake;snapSoon()});
+setTimeout(function(){window.beep=beep;window.burst=burst;window.shake=shake},0);
 })();`;
 
 export function extractGameScript(html: string): string {

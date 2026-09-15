@@ -2,7 +2,8 @@
 
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Keypair } from "@solana/web3.js";
-import { Check, Info, Lock, Plus, Sparkles, X } from "lucide-react";
+import { Check, ExternalLink, Info, Lock, Plus, Sparkles, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -11,7 +12,7 @@ import { RomCabinet } from "@/components/rom-cabinet";
 import { SiteHeader } from "@/components/site-header";
 import { WalletButton } from "@/components/wallet-ui";
 import { apiUrl } from "@/lib/api";
-import { STUDIO_MAX_DRAFTS, CHAT_COOLDOWN_MS, CHAT_MAX_USER_MESSAGES } from "@/lib/constants";
+import { STUDIO_MAX_DRAFTS, CHAT_COOLDOWN_MS, CHAT_MAX_USER_MESSAGES, PUMP_FUN_COIN_URL, SOLSCAN_TOKEN_URL, SOLSCAN_TX_URL } from "@/lib/constants";
 import { utf8Bytes } from "@/lib/game-codec";
 import { upsertLaunch, fetchLaunch } from "@/lib/launches-store";
 import {
@@ -22,7 +23,7 @@ import {
   supplyPctForSol,
 } from "@/lib/pump-curve";
 import { createPumpToken, uploadPumpMetadata } from "@/lib/pump-launch";
-import { allocatePlaySlug, publicPlayUrl, tickerSlug } from "@/lib/site";
+import { allocatePlaySlug, playPath, publicPlayUrl, tickerSlug } from "@/lib/site";
 import {
   draftTabLabel,
   emptyDraft,
@@ -260,8 +261,9 @@ export function CreateStudio() {
       });
 
       setStatus("Saving game…");
+      const liveMint = created.mint.toBase58();
       const record: OcgLaunch = {
-        id: created.mint.toBase58(),
+        id: liveMint,
         name: active.name,
         symbol: active.symbol,
         description: active.description || originalPrompt,
@@ -270,7 +272,7 @@ export function CreateStudio() {
         gameHtml: active.game.html,
         gameBytes: utf8Bytes(active.game.html),
         compressedBytes: active.game.compressedBytes,
-        mint,
+        mint: liveMint,
         creator: wallet.publicKey.toBase58(),
         slug,
         playUrl: gameUrl,
@@ -278,13 +280,10 @@ export function CreateStudio() {
         createSignature: created.signature,
         createdAt: Date.now(),
         image: active.imagePreview,
-        sparkline: [1, 2, 2, 3, 4, 4, 6, 7, 8, 9, 11, 13],
-        marketCapUsd: active.solBuy * 150,
-        volumeUsd: active.solBuy * 80,
-        change24h: 0,
+        sparkline: [],
       };
       await upsertLaunch(record);
-      patchDraft(draftId, { mint, createSignature: created.signature });
+      patchDraft(draftId, { mint: liveMint, createSignature: created.signature });
       setStatus("Launched. This tab is locked — open a new tab to make another game.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Launch failed.");
@@ -444,21 +443,78 @@ export function CreateStudio() {
                         : "launchocg.com/TICKER"
                     }
                   />
-                  <Summary label="Ticker" value={active.symbol ? `$${active.symbol}` : "—"} />
-                  <Summary
-                    label="Dev buy"
-                    value={
-                      active.solBuy > 0
-                        ? `${active.solBuy.toFixed(3)} SOL · ${pct.toFixed(2)}%`
-                        : "None"
-                    }
-                  />
-                  <Summary label="Mayhem" value={active.mayhemMode ? "On" : "Off"} />
-                  {locked ? <Summary label="Mint" value={active.mint?.slice(0, 8) + "…" || "Live"} /> : null}
+                  {locked ? null : (
+                    <>
+                      <Summary label="Ticker" value={active.symbol ? `$${active.symbol}` : "—"} />
+                      <Summary
+                        label="Dev buy"
+                        value={
+                          active.solBuy > 0
+                            ? `${active.solBuy.toFixed(3)} SOL · ${pct.toFixed(2)}%`
+                            : "None"
+                        }
+                      />
+                      <Summary label="Mayhem" value={active.mayhemMode ? "On" : "Off"} />
+                    </>
+                  )}
                 </dl>
 
-                {showLaunch ? (
-                  <div className="mt-3 space-y-2.5 border-t border-border pt-3">
+                <AnimatePresence mode="wait" initial={false}>
+                  {locked ? (
+                    <motion.div
+                      key="live"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.35, ease: "easeOut" }}
+                      className="mt-3 space-y-3 border-t border-border pt-3"
+                    >
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <Field label="Name">
+                          <p className="flex h-8 items-center truncate rounded-lg border border-border bg-background px-2.5 text-sm">
+                            {active.name || "—"}
+                          </p>
+                        </Field>
+                        <Field label="Ticker">
+                          <p className="flex h-8 items-center truncate rounded-lg border border-border bg-background px-2.5 text-sm">
+                            {active.symbol ? `$${active.symbol}` : "—"}
+                          </p>
+                        </Field>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {active.mint ? (
+                          <>
+                            <LiveLink
+                              href={`${PUMP_FUN_COIN_URL}/${active.mint}`}
+                              label="Pump.fun"
+                              delay={0.05}
+                              primary
+                            />
+                            <LiveLink
+                              href={`${SOLSCAN_TOKEN_URL}/${active.mint}`}
+                              label="Solscan"
+                              delay={0.12}
+                            />
+                          </>
+                        ) : null}
+                        {active.createSignature ? (
+                          <LiveLink
+                            href={`${SOLSCAN_TX_URL}/${active.createSignature}`}
+                            label="Game tx"
+                            delay={0.18}
+                          />
+                        ) : null}
+                      </div>
+                    </motion.div>
+                  ) : showLaunch ? (
+                    <motion.div
+                      key="form"
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.25 }}
+                      className="mt-3 space-y-2.5 border-t border-border pt-3"
+                    >
                     <div className="grid gap-2 sm:grid-cols-2">
                       <Field label="Name">
                         <input
@@ -628,13 +684,21 @@ export function CreateStudio() {
                         {active.solBuy > 0 ? ` · ~${formatTokenAmount(active.solBuy)} tokens` : ""}
                       </p>
                     </div>
-                  </div>
-                ) : (
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Prompt a game first. Name, ticker, and image lock in at mint.
-                  </p>
-                )}
+                    </motion.div>
+                  ) : (
+                    <motion.p
+                      key="empty"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="mt-3 text-xs text-muted-foreground"
+                    >
+                      Prompt a game first. Name, ticker, and image lock in at mint.
+                    </motion.p>
+                  )}
+                </AnimatePresence>
 
+                {locked ? null : (
                 <div className="mt-3 space-y-1.5 rounded-lg bg-muted/50 p-2 text-[11px] text-muted-foreground">
                   <p className="flex gap-1.5">
                     <Lock className="mt-0.5 size-3 shrink-0" />
@@ -649,16 +713,25 @@ export function CreateStudio() {
                     Tabs cache locally so you can switch drafts.
                   </p>
                 </div>
+                )}
               </div>
 
               <div className="shrink-0 border-t border-border p-2.5">
                 {locked ? (
-                  <Link
-                    href="/"
-                    className="flex h-10 w-full items-center justify-center rounded-xl bg-secondary text-sm font-medium text-foreground"
-                  >
-                    View launches
-                  </Link>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Link
+                      href={playPath(tickerSlug(active.symbol))}
+                      className="flex h-10 items-center justify-center rounded-xl bg-primary text-sm font-medium text-primary-foreground"
+                    >
+                      Play page
+                    </Link>
+                    <Link
+                      href="/"
+                      className="flex h-10 items-center justify-center rounded-xl bg-secondary text-sm font-medium text-foreground"
+                    >
+                      View launches
+                    </Link>
+                  </div>
                 ) : wallet.publicKey ? (
                   <button
                     type="button"
@@ -679,6 +752,38 @@ export function CreateStudio() {
         </div>
       </main>
     </div>
+  );
+}
+
+function LiveLink({
+  href,
+  label,
+  delay = 0,
+  primary = false,
+}: {
+  href: string;
+  label: string;
+  delay?: number;
+  primary?: boolean;
+}) {
+  return (
+    <motion.a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay, ease: "easeOut" }}
+      className={cn(
+        "inline-flex h-10 items-center justify-center gap-2 rounded-xl text-sm font-medium",
+        primary
+          ? "bg-primary text-primary-foreground"
+          : "border border-border bg-background text-foreground hover:border-primary/50 hover:bg-muted",
+      )}
+    >
+      {label}
+      <ExternalLink className="size-3.5" />
+    </motion.a>
   );
 }
 

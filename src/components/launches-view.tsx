@@ -1,13 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 
 import { FilterChips, LaunchCard } from "@/components/launch-card";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { hydrateLaunches, readLaunches, subscribeLaunches, getEmptyLaunches } from "@/lib/launches-store";
-import { fetchPumpStats } from "@/lib/pump-launch";
+import {
+  fetchMarketCaps,
+  hydrateLaunches,
+  readLaunches,
+  subscribeLaunches,
+  getEmptyLaunches,
+} from "@/lib/launches-store";
 import type { OcgLaunch } from "@/lib/types";
 
 export function LaunchesView() {
@@ -15,56 +20,25 @@ export function LaunchesView() {
   const [genre, setGenre] = useState("All");
   const stored = useSyncExternalStore(subscribeLaunches, readLaunches, getEmptyLaunches);
   const [stats, setStats] = useState<Record<string, Partial<OcgLaunch>>>({});
-  const mintKey = stored.map((item) => item.mint ?? "").join("|");
 
-  async function applyStats(mint: string, coin: Awaited<ReturnType<typeof fetchPumpStats>>) {
-    if (!coin) return;
-    setStats((prev) => ({
-      ...prev,
-      [mint]: {
-        marketCapUsd: coin.usd_market_cap ?? coin.market_cap,
-        volumeUsd: coin.volume_24h,
-        change24h: coin.price_change_24h,
-      },
-    }));
-  }
+  const loadCaps = useCallback(async () => {
+    const next = await fetchMarketCaps();
+    setStats(next);
+  }, []);
 
-  async function refreshLaunch(launch: OcgLaunch) {
-    if (!launch.mint) return;
-    const coin = await fetchPumpStats(launch.mint);
-    await applyStats(launch.mint, coin);
+  async function refreshLaunch() {
+    await hydrateLaunches();
+    await loadCaps();
   }
 
   useEffect(() => {
     void hydrateLaunches();
-  }, []);
-
-  useEffect(() => {
-    const mints = mintKey.split("|").filter(Boolean);
-    if (mints.length === 0) return;
-    let cancelled = false;
-    void Promise.all(
-      mints.map(async (mint) => {
-        const coin = await fetchPumpStats(mint);
-        return [mint, coin] as const;
-      }),
-    ).then((entries) => {
-      if (cancelled) return;
-      const next: Record<string, Partial<OcgLaunch>> = {};
-      for (const [mint, coin] of entries) {
-        if (!coin) continue;
-        next[mint] = {
-          marketCapUsd: coin.usd_market_cap ?? coin.market_cap,
-          volumeUsd: coin.volume_24h,
-          change24h: coin.price_change_24h,
-        };
-      }
-      setStats(next);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [mintKey]);
+    void loadCaps();
+    const timer = window.setInterval(() => {
+      void loadCaps();
+    }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [loadCaps]);
 
   const local = useMemo(
     () =>
@@ -87,7 +61,7 @@ export function LaunchesView() {
       <SiteHeader query={query} onQueryChange={setQuery} />
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-8 md:px-6">
         <div className="max-w-2xl">
-          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Launch games paired with SOL</h1>
+          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Launch games</h1>
           <p className="mt-2 text-muted-foreground">
             Create and discover playable games. Each launch hosts the game on OCG and mints a
             Pump.fun token whose metadata points at the play URL.
@@ -115,7 +89,7 @@ export function LaunchesView() {
               <LaunchCard
                 key={launch.id}
                 launch={launch}
-                onRefresh={refreshLaunch}
+                onRefresh={() => void refreshLaunch()}
               />
             ))
           )}

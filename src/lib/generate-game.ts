@@ -19,9 +19,12 @@ import {
   implementSystemPrompt,
   implementUserPrompt,
   planSystemPrompt,
+  polishPrompt,
+  repairPrompt,
   reviseSystemPrompt,
   reviseUserPrompt,
 } from "./game-prompt";
+import { diagnoseGame } from "./game-qa";
 import { extractHtml } from "./minify-game";
 import { extractGameScript } from "./wrap-game";
 import { fallbackGame } from "./seed-games";
@@ -29,7 +32,7 @@ import type { GenerateGameRequest, GenerateGameResponse } from "./types";
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
-const CODE_TOKENS = 12000;
+const CODE_TOKENS = 16000;
 
 async function chat(
   apiKey: string,
@@ -41,7 +44,7 @@ async function chat(
   const thread: ChatMessage[] = [...messages];
   let combined = "";
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -215,7 +218,7 @@ export async function generateGameFromChat(input: GenerateGameRequest): Promise<
       plan = parsePlan(planned.text, idea);
     }
 
-    const made = revising
+    let made = revising
       ? await withModelFallback(
           apiKey,
           codeModel,
@@ -227,7 +230,7 @@ export async function generateGameFromChat(input: GenerateGameRequest): Promise<
               content: `Chat so far:\n${chatTranscript(messages)}\n\n${reviseUserPrompt(trimmed, input.html ?? "")}`,
             },
           ],
-          { temperature: 0.4, maxTokens: CODE_TOKENS },
+          { temperature: 0.3, maxTokens: CODE_TOKENS },
         )
       : await withModelFallback(
           apiKey,
@@ -237,11 +240,41 @@ export async function generateGameFromChat(input: GenerateGameRequest): Promise<
             { role: "system", content: implementSystemPrompt(plan, idea) },
             { role: "user", content: implementUserPrompt(plan, idea) },
           ],
-          { temperature: 0.45, maxTokens: CODE_TOKENS },
+          { temperature: 0.3, maxTokens: CODE_TOKENS },
         );
 
-    const html = extractHtml(made.text);
+    let html = extractHtml(made.text);
+    let issues = diagnoseGame(html);
+    for (let pass = 0; pass < 2 && issues.length > 0; pass += 1) {
+      console.log(JSON.stringify({ event: "repair-game", pass, mechanic: plan.mechanic, issues }));
+      const tooSmall = issues.some((item) => item.includes("too small"));
+      const repaired = await withModelFallback(
+        apiKey,
+        codeModel,
+        OPENROUTER_FALLBACK_MODEL,
+        [
+          { role: "system", content: implementSystemPrompt(plan, idea) },
+          {
+            role: "user",
+            content: `${tooSmall && pass > 0 ? polishPrompt(plan, idea) : repairPrompt(plan, idea, issues)}\n\nBROKEN HTML:\n${html.slice(0, 22000)}`,
+          },
+        ],
+        { temperature: 0.12, maxTokens: CODE_TOKENS },
+      );
+      const next = extractHtml(repaired.text);
+      const nextIssues = diagnoseGame(next);
+      if (next.length < 400) continue;
+      if (nextIssues.length <= issues.length) {
+        html = next;
+        made = repaired;
+        issues = nextIssues;
+      } else {
+        break;
+      }
+    }
+
     const scriptChars = extractGameScript(html).length;
+    const hasLoop = /requestAnimationFrame/.test(html) || /setInterval\s*\(/.test(html);
     console.log(
       JSON.stringify({
         event: revising ? "revise-game" : "generate-game",
@@ -249,12 +282,13 @@ export async function generateGameFromChat(input: GenerateGameRequest): Promise<
         mechanic: plan.mechanic,
         bytes: utf8Bytes(html),
         scriptChars,
-        hasRaf: /requestAnimationFrame/.test(html),
+        issues,
+        hasLoop,
         hasCanvas: /<canvas[\s>]/i.test(html),
       }),
     );
 
-    if (!/requestAnimationFrame/.test(html) || scriptChars < 80) {
+    if (!hasLoop || !/<canvas[\s>]/i.test(html)) {
       if (revising && input.html) {
         const result = pack(input.html, plan, made.model, "Could not apply that change — the last playable build is still up.", true);
         if (input.name) result.name = input.name;
@@ -262,21 +296,20 @@ export async function generateGameFromChat(input: GenerateGameRequest): Promise<
         result.error = "Revision had no game loop.";
         return { status: 200, body: result };
       }
-      const demo = fallbackGame(trimmed);
-      const result = pack(
-        demo.html,
-        { ...plan, title: demo.name.toUpperCase() },
-        made.model,
-        replyFor(false, demo.name, trimmed),
-        true,
-        "Model game had no loop — used a compact fallback.",
-      );
-      result.name = demo.name;
-      result.symbol = demo.symbol;
-      return { status: 200, body: result };
+      return {
+        status: 500,
+        body: { error: "The model did not ship a playable canvas game. Send the prompt again — do not launch this build." },
+      };
     }
 
-    const packed = pack(html, plan, made.model, replyFor(revising, tickerFromPlan(plan).name, trimmed));
+    const packed = pack(
+      html,
+      plan,
+      made.model,
+      issues.length
+        ? `Built ${tickerFromPlan(plan).name}. Play it, then tell me what to tighten.`
+        : replyFor(revising, tickerFromPlan(plan).name, trimmed),
+    );
     if (revising && input.name) packed.name = input.name;
     if (revising && input.symbol) packed.symbol = input.symbol;
     return { status: 200, body: packed };
@@ -294,17 +327,9 @@ export async function generateGameFromChat(input: GenerateGameRequest): Promise<
       if (input.symbol) result.symbol = input.symbol;
       return { status: 200, body: result };
     }
-    const demo = fallbackGame(trimmed);
-    const result = pack(
-      demo.html,
-      { ...localPlan, title: demo.name.toUpperCase() },
-      "ocg-fallback",
-      replyFor(false, demo.name, trimmed),
-      true,
-      error instanceof Error ? error.message : "Game generation failed.",
-    );
-    result.name = demo.name;
-    result.symbol = demo.symbol;
-    return { status: 200, body: result };
+    return {
+      status: 500,
+      body: { error: error instanceof Error ? error.message : "Game generation failed. Send the prompt again." },
+    };
   }
 }

@@ -1,6 +1,12 @@
 import type { Adapter, StandardWalletAdapter } from "@solana/wallet-adapter-base";
-import { SolanaSignTransaction, type SolanaSignTransactionFeature } from "@solana/wallet-standard-features";
+import {
+  SolanaSignAndSendTransaction,
+  SolanaSignTransaction,
+  type SolanaSignAndSendTransactionFeature,
+  type SolanaSignTransactionFeature,
+} from "@solana/wallet-standard-features";
 import { Connection, PublicKey, VersionedTransaction } from "@solana/web3.js";
+import bs58 from "bs58";
 
 import { apiUrl } from "@/lib/api";
 import {
@@ -16,6 +22,11 @@ type WalletSender = {
   publicKey: PublicKey | null;
   wallet?: { adapter: Adapter } | null;
   signTransaction?: (transaction: VersionedTransaction) => Promise<VersionedTransaction>;
+  sendTransaction?: (
+    transaction: VersionedTransaction,
+    connection: Connection,
+    options?: { skipPreflight?: boolean; maxRetries?: number; preflightCommitment?: "processed" | "confirmed" | "finalized" },
+  ) => Promise<string>;
 };
 
 function compactMetadataUri(uri: string): string {
@@ -40,6 +51,41 @@ function bytesFromBase64(value: string): Uint8Array {
 
 function isStandardAdapter(adapter: Adapter | undefined | null): adapter is StandardWalletAdapter {
   return Boolean(adapter && "standard" in adapter && adapter.standard === true && "wallet" in adapter);
+}
+
+async function signAndSendViaWallet(args: {
+  adapter?: Adapter | null;
+  sendTransaction?: WalletSender["sendTransaction"];
+  connection: Connection;
+  transaction: VersionedTransaction;
+}): Promise<string | null> {
+  if (isStandardAdapter(args.adapter)) {
+    const std = args.adapter.wallet;
+    const account = std.accounts[0];
+    if (!account) throw new Error("Connect a wallet first.");
+    if (SolanaSignAndSendTransaction in std.features) {
+      console.info("[OCG pump] sending via wallet-standard solana:signAndSendTransaction chain=solana:mainnet");
+      const [output] = await (std.features as SolanaSignAndSendTransactionFeature)[
+        SolanaSignAndSendTransaction
+      ].signAndSendTransaction({
+        account,
+        chain: "solana:mainnet",
+        transaction: args.transaction.serialize(),
+        options: { skipPreflight: false, maxRetries: 8, commitment: "confirmed" },
+      });
+      if (!output?.signature?.length) throw new Error("Wallet did not return a transaction signature.");
+      return bs58.encode(output.signature);
+    }
+  }
+  if (args.sendTransaction) {
+    console.info("[OCG pump] sending via adapter.sendTransaction (wallet-owned send)");
+    return args.sendTransaction(args.transaction, args.connection, {
+      skipPreflight: false,
+      maxRetries: 8,
+      preflightCommitment: "confirmed",
+    });
+  }
+  return null;
 }
 
 async function signMainnetVersionedTx(args: {
@@ -178,46 +224,51 @@ export async function createPumpToken(args: {
     );
   }
 
-  const signed = await signMainnetVersionedTx({
+  let signature = await signAndSendViaWallet({
     adapter: args.wallet.wallet?.adapter,
-    signTransaction: args.wallet.signTransaction,
-    transaction: tx,
-  });
-  const afterSign = inspectPumpTx(signed);
-  console.info("[OCG pump] wallet-signed tx", afterSign);
-  if (!afterSign.feePayerSigned) {
-    throw new Error("Wallet did not sign the Pump.fun transaction.");
-  }
-  if (!afterSign.mintSigned) {
-    throw new Error("Wallet dropped the mint signature. Phantom must keep the extra signer.");
-  }
-
-  const signedSim = await simulatePumpTxVerbose({
+    sendTransaction: args.wallet.sendTransaction,
     connection,
-    transaction: signed,
-    label: "browser Helius after wallet sign (sigVerify)",
-    sigVerify: true,
-    sizeWithoutAlt: json.simulation?.sizeWithoutAlt ?? null,
+    transaction: tx,
+  }).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/reject|cancel|denied|user/i.test(message)) throw error instanceof Error ? error : new Error(message);
+    console.warn("[OCG pump] wallet-owned send failed, falling back to sign-then-send", error);
+    return null;
   });
-  if (!signedSim.ok) {
-    throw new Error(
-      `Pump create simulation failed after signing: ${signedSim.logs.slice(-20).join("\n") || JSON.stringify(signedSim.err)}`,
-    );
+
+  if (!signature) {
+    const signed = await signMainnetVersionedTx({
+      adapter: args.wallet.wallet?.adapter,
+      signTransaction: args.wallet.signTransaction,
+      transaction: tx,
+    });
+    const afterSign = inspectPumpTx(signed);
+    console.info("[OCG pump] wallet-signed tx", afterSign);
+    if (!afterSign.feePayerSigned) {
+      throw new Error("Wallet did not sign the Pump.fun transaction.");
+    }
+    if (!afterSign.mintSigned) {
+      throw new Error("Wallet dropped the mint signature. Phantom must keep the extra signer.");
+    }
+
+    const raw = signed.serialize();
+    console.info("[OCG pump] sending raw tx via Helius with preflight", { bytes: raw.length });
+    try {
+      signature = await connection.sendRawTransaction(raw, {
+        skipPreflight: false,
+        maxRetries: 8,
+        preflightCommitment: "confirmed",
+      });
+    } catch (error) {
+      console.warn("[OCG pump] preflight send failed, retrying skipPreflight", error);
+      signature = await connection.sendRawTransaction(raw, {
+        skipPreflight: true,
+        maxRetries: 8,
+        preflightCommitment: "confirmed",
+      });
+    }
   }
 
-  const raw = signed.serialize();
-  console.info("[OCG pump] sending raw tx via Helius, skipPreflight", { bytes: raw.length });
-  let signature: string;
-  try {
-    signature = await connection.sendRawTransaction(raw, {
-      skipPreflight: true,
-      maxRetries: 8,
-      preflightCommitment: "confirmed",
-    });
-  } catch (error) {
-    console.error("[OCG pump] Helius sendRawTransaction failed", error);
-    throw error instanceof Error ? error : new Error("Could not send the Pump.fun transaction.");
-  }
   console.info("[OCG pump] submitted", signature);
   await waitForSignature(connection, signature, json.lastValidBlockHeight);
   return { mint: new PublicKey(json.mint), signature };
@@ -225,9 +276,20 @@ export async function createPumpToken(args: {
 
 export async function fetchPumpStats(mint: string): Promise<PumpCoinStats | null> {
   try {
-    const response = await fetch(apiUrl(`/api/pump/${mint}`));
+    const response = await fetch(apiUrl("/api/market-caps"));
     if (!response.ok) return null;
-    return (await response.json()) as PumpCoinStats;
+    const json = (await response.json()) as Record<
+      string,
+      { marketCapUsd?: number; volumeUsd?: number; change24h?: number }
+    >;
+    const snap = json[mint];
+    if (!snap) return null;
+    return {
+      usd_market_cap: snap.marketCapUsd,
+      market_cap: snap.marketCapUsd,
+      volume_24h: snap.volumeUsd,
+      price_change_24h: snap.change24h,
+    };
   } catch {
     return null;
   }

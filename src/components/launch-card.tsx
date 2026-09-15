@@ -149,11 +149,6 @@ export function LaunchCard({
               : "—"}
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
-          <span>Paired with</span>
-          <span className="inline-grid size-4 place-items-center rounded-full bg-[#1a3338] text-[6px] font-bold text-foreground">
-            S
-          </span>
-          <span className="font-medium text-foreground/80">SOL</span>
           <span className="rounded-full border border-positive/30 bg-positive/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-positive uppercase">
             {launch.genre}
           </span>

@@ -6,7 +6,7 @@ import { Search } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand-logo";
 import { WalletButton } from "@/components/wallet-ui";
-import { APP_TAGLINE } from "@/lib/constants";
+import { APP_TAGLINE, OCG_X_URL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 export function SiteHeader({
@@ -59,10 +59,28 @@ export function SiteHeader({
           >
             Launch game
           </Link>
+          <a
+            href={OCG_X_URL}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="OCG on X"
+            title="OCG on X"
+            className="grid size-9 shrink-0 place-items-center rounded-full border border-border text-white hover:bg-muted"
+          >
+            <XLogo className="size-3.5" />
+          </a>
           <WalletButton />
         </div>
       </div>
     </header>
+  );
+}
+
+function XLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className={className} fill="currentColor">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
   );
 }
 

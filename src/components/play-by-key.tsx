@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { PlayModal } from "@/components/play-modal";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { fetchLaunch, getEmptyLaunches, readLaunches, subscribeLaunches } from "@/lib/launches-store";
+import { fetchLaunch, hydrateLaunches, getEmptyLaunches, readLaunches, subscribeLaunches } from "@/lib/launches-store";
 import { launchSlug } from "@/lib/site";
 import type { OcgLaunch } from "@/lib/types";
 
@@ -25,7 +25,7 @@ export function PlayByKey({ lookup }: { lookup: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    void fetchLaunch(lookup).then((launch) => {
+    void hydrateLaunches().then(() => fetchLaunch(lookup)).then((launch) => {
       if (!cancelled) setRemote(launch);
     });
     return () => {

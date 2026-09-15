@@ -8,9 +8,9 @@ import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import { generateGameFromChat } from "../src/lib/generate-game";
 import { buildMintSignedPumpCreateTx } from "../src/lib/pump-create-tx";
 import { HELIUS_RPC_HTTP } from "../src/lib/solana-rpc";
-import type { PumpCoinStats } from "../src/lib/types";
 import { checkGenerateLimit, clientIp } from "./chat-limit";
 import { ensureLaunchSchema, getLaunch, listLaunches, parseLaunchBody, upsertLaunchRecord } from "./db";
+import { getMarketCapCache, overlayMarketCaps, startMarketCapPoller } from "./market-caps";
 
 loadEnv({ path: ".env.local" });
 loadEnv({ path: ".env" });
@@ -19,7 +19,6 @@ const PUMP_ENDPOINTS = [
   "https://pump.fun/api/ipfs",
   "https://frontend-api-v3.pump.fun/ipfs",
 ];
-const PUMP_FUN_API = "https://frontend-api-v3.pump.fun";
 const SOLANA_RPC = process.env.SOLANA_RPC ?? HELIUS_RPC_HTTP;
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2_000_000 } });
@@ -65,7 +64,7 @@ app.get("/health", (_req, res) => {
 
 app.get("/api/launches", async (_req, res) => {
   try {
-    const launches = await listLaunches();
+    const launches = overlayMarketCaps(await listLaunches());
     res.json(launches);
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Could not list launches." });
@@ -75,11 +74,7 @@ app.get("/api/launches", async (_req, res) => {
 app.get("/api/launches/:id", async (req, res) => {
   try {
     const launch = await getLaunch(String(req.params.id ?? ""));
-    if (!launch) {
-      res.status(404).json({ error: "Launch not found." });
-      return;
-    }
-    res.json(launch);
+    res.json(launch ? overlayMarketCaps([launch])[0] : null);
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Could not load launch." });
   }
@@ -116,18 +111,23 @@ app.post("/api/generate-game", async (req, res) => {
   res.status(result.status).json(result.body);
 });
 
-app.get("/api/pump/:mint", async (req, res) => {
-  try {
-    const response = await fetch(`${PUMP_FUN_API}/coins/${req.params.mint}`);
-    if (!response.ok) {
-      res.status(response.status).json(null);
-      return;
-    }
-    const stats = (await response.json()) as PumpCoinStats;
-    res.json(stats);
-  } catch {
-    res.status(502).json(null);
+app.get("/api/market-caps", (_req, res) => {
+  res.json(getMarketCapCache());
+});
+
+app.get("/api/pump/:mint", (req, res) => {
+  const mint = String(req.params.mint ?? "");
+  const cached = getMarketCapCache()[mint];
+  if (cached) {
+    res.json({
+      usd_market_cap: cached.marketCapUsd,
+      market_cap: cached.marketCapUsd,
+      volume_24h: cached.volumeUsd,
+      price_change_24h: cached.change24h,
+    });
+    return;
   }
+  res.json(null);
 });
 
 app.post("/api/ipfs", upload.single("file"), async (req, res) => {
@@ -249,9 +249,11 @@ app.post("/rpc", async (req, res) => {
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
 const server = app.listen(port, "0.0.0.0", () => {
   console.log(`OCG API listening on ${port}`);
-  void ensureLaunchSchema().catch((error: unknown) => {
-    console.error("Launch schema failed:", error);
-  });
+  void ensureLaunchSchema()
+    .then(() => startMarketCapPoller())
+    .catch((error: unknown) => {
+      console.error("Launch schema failed:", error);
+    });
 });
 server.timeout = 180_000;
 server.headersTimeout = 185_000;

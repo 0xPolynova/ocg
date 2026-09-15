@@ -134,32 +134,41 @@ export async function listLaunches(): Promise<OcgLaunch[]> {
 export async function getLaunch(id: string): Promise<OcgLaunch | null> {
   await ensureLaunchSchema();
   const db = getPool();
-  if (!db) {
+  const matches = (item: OcgLaunch) => {
+    const needle = id.trim().toLowerCase();
+    if (!needle) return false;
     return (
-      [...memory.values()].find(
-        (item) =>
-          item.id === id ||
-          item.mint === id ||
-          item.symbol === id ||
-          item.slug === id ||
-          item.symbol.toLowerCase() === id.toLowerCase() ||
-          item.slug?.toLowerCase() === id.toLowerCase(),
-      ) ?? null
+      item.id.toLowerCase() === needle ||
+      item.mint?.toLowerCase() === needle ||
+      item.symbol.toLowerCase() === needle ||
+      (item.slug ?? "").toLowerCase() === needle ||
+      tickerSlug(item.symbol).toLowerCase() === needle
     );
+  };
+  if (!db) {
+    return [...memory.values()].find(matches) ?? null;
   }
   const result = await db.query<LaunchRow>(
     "SELECT * FROM launches WHERE id = $1 OR mint = $1 OR symbol = $1 OR slug = $1 OR LOWER(symbol) = LOWER($1) OR LOWER(slug) = LOWER($1) LIMIT 1",
     [id],
   );
-  return result.rows[0] ? fromRow(result.rows[0]) : null;
+  if (result.rows[0]) return fromRow(result.rows[0]);
+  const listed = await db.query<LaunchRow>("SELECT * FROM launches ORDER BY created_at DESC LIMIT 200");
+  return listed.rows.map(fromRow).find(matches) ?? null;
 }
 
 export async function upsertLaunchRecord(launch: OcgLaunch): Promise<OcgLaunch> {
   await ensureLaunchSchema();
   const db = getPool();
   if (!db) {
-    memory.set(launch.id, launch);
-    return launch;
+    const existing = memory.get(launch.id);
+    memory.set(launch.id, {
+      ...launch,
+      marketCapUsd: existing?.marketCapUsd ?? launch.marketCapUsd,
+      volumeUsd: existing?.volumeUsd ?? launch.volumeUsd,
+      change24h: existing?.change24h ?? launch.change24h,
+    });
+    return memory.get(launch.id) ?? launch;
   }
   await db.query(
     `INSERT INTO launches (
@@ -185,9 +194,9 @@ export async function upsertLaunchRecord(launch: OcgLaunch): Promise<OcgLaunch> 
       store_signatures = EXCLUDED.store_signatures,
       create_signature = EXCLUDED.create_signature,
       demo = EXCLUDED.demo,
-      market_cap_usd = EXCLUDED.market_cap_usd,
-      volume_usd = EXCLUDED.volume_usd,
-      change_24h = EXCLUDED.change_24h,
+      market_cap_usd = COALESCE(launches.market_cap_usd, EXCLUDED.market_cap_usd),
+      volume_usd = COALESCE(launches.volume_usd, EXCLUDED.volume_usd),
+      change_24h = COALESCE(launches.change_24h, EXCLUDED.change_24h),
       sparkline = EXCLUDED.sparkline`,
     [
       launch.id,
@@ -214,6 +223,34 @@ export async function upsertLaunchRecord(launch: OcgLaunch): Promise<OcgLaunch> 
     ],
   );
   return launch;
+}
+
+export async function applyLaunchStats(
+  mint: string,
+  stats: { marketCapUsd?: number; volumeUsd?: number; change24h?: number },
+): Promise<void> {
+  await ensureLaunchSchema();
+  const patch = (item: OcgLaunch): OcgLaunch => ({
+    ...item,
+    marketCapUsd: stats.marketCapUsd ?? item.marketCapUsd,
+    volumeUsd: stats.volumeUsd ?? item.volumeUsd,
+    change24h: stats.change24h ?? item.change24h,
+  });
+  const db = getPool();
+  if (!db) {
+    for (const item of memory.values()) {
+      if (item.mint === mint || item.id === mint) memory.set(item.id, patch(item));
+    }
+    return;
+  }
+  await db.query(
+    `UPDATE launches
+     SET market_cap_usd = COALESCE($2, market_cap_usd),
+         volume_usd = COALESCE($3, volume_usd),
+         change_24h = COALESCE($4, change_24h)
+     WHERE mint = $1 OR id = $1`,
+    [mint, stats.marketCapUsd ?? null, stats.volumeUsd ?? null, stats.change24h ?? null],
+  );
 }
 
 export function parseLaunchBody(body: unknown): OcgLaunch | null {

@@ -65,6 +65,13 @@ WHAT "FINISHED" MEANS (all required)
 5. Juice: beep, burst, shake on start, score, hit, death.
 6. Playable for 30+ seconds. At least one setpiece.
 
+HARD RULES — breaking any of these ships a dead game
+- Never declare beep, burst, shake, canvas, cv, ctx, or localStorage (let/const/var/function). The host already provides them.
+- Never HUD via DOM (no innerText, innerHTML, getElementById for score). fillText on the canvas only.
+- requestAnimationFrame loop is mandatory. Title (mode 0) → play (1) → death (2) → click/key retries.
+- Collisions must actually score or kill. If the player cannot die or cannot score, you failed.
+- Movement must be visible the first second after start.
+
 BUDGET
 - Write a finished game in one pass. About ${TARGET_RAW_BYTES} characters is enough. Do not pad.
 - No external URLs, images, fonts, or libraries. Keep best in a variable named best; localStorage is already stubbed.
@@ -89,6 +96,7 @@ RULES
 - Keep title/play/game-over, viewport fill (innerWidth/innerHeight), juice, and the host aliases canvas/cv/c/ctx.
 - Palette: bg #041014, player #8fd4de, good #3ddc8e, bad #f07178, accent #f8d36a, text #e8fbff.
 - No external URLs, images, fonts, or libraries.
+- Never redeclare beep/burst/shake/canvas/ctx. Draw HUD on the canvas. Keep a working title/play/over loop.
 
 Apply their change. Ship the full updated HTML.`;
 }
@@ -100,6 +108,15 @@ export function reviseUserPrompt(request: string, html: string): string {
 
 export function polishPrompt(plan: GamePlan, idea: string): string {
   return `This is still too small. Keep ${plan.mechanic} + title "${plan.title}" + camera ${plan.camera}, but DOUBLE the drawing code: better sprites for ${plan.player} and ${plan.hazards}, a full world, title/play/game-over, ramp, HUD, juice. Target ${TARGET_RAW_BYTES} characters. It must still be recognizably "${idea}". Output ONLY HTML.`;
+}
+
+export function repairPrompt(plan: GamePlan, idea: string, issues: string[]): string {
+  return `The HTML you wrote does not run as a game. Fix every issue below and output ONLY one complete HTML document. Same game: "${idea}" (${plan.mechanic}, ${plan.camera}, "${plan.title}").
+
+BROKEN BECAUSE:
+${issues.map((item) => `- ${item}`).join("\n")}
+
+Required: canvas#c, requestAnimationFrame loop, title/play/game-over, working collisions, fillText HUD, no innerText, do not declare beep/burst/shake. Take the extra time. It must actually play.`;
 }
 
 export function expandPrompt(plan: GamePlan, idea: string): string {
