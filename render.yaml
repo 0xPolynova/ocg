@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: ocg-api
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npx tsx server/index.ts
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: OPENROUTER_MODEL
+        value: google/gemini-2.5-flash
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: SOLANA_RPC
+        sync: false
+
+  - type: web
+    name: ocg-web
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:web
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: ocg-api
+          envVarKey: RENDER_EXTERNAL_URL
