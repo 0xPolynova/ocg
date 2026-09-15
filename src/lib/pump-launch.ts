@@ -1,17 +1,21 @@
 import BN from "bn.js";
-import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  TransactionMessage,
+  VersionedTransaction,
+} from "@solana/web3.js";
 import type { SendTransactionOptions } from "@solana/wallet-adapter-base";
 import { NATIVE_MINT } from "@solana/spl-token";
 
 import { apiUrl } from "@/lib/api";
 import type { PumpCoinStats } from "@/lib/types";
 
-const LEGACY_TX_LIMIT = 1232;
-
 type WalletSender = {
   publicKey: PublicKey | null;
   sendTransaction: (
-    transaction: Transaction,
+    transaction: VersionedTransaction,
     connection: Connection,
     options?: SendTransactionOptions,
   ) => Promise<string>;
@@ -28,30 +32,6 @@ function compactMetadataUri(uri: string): string {
     if (short.length <= trimmed.length) return short;
   }
   return trimmed;
-}
-
-async function sendAndConfirm(
-  connection: Connection,
-  wallet: WalletSender,
-  tx: Transaction,
-  signers: Keypair[] = [],
-): Promise<string> {
-  if (!wallet.publicKey) throw new Error("Connect a wallet first.");
-  tx.feePayer = wallet.publicKey;
-  tx.recentBlockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;
-  const wire = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
-  if (wire.length > LEGACY_TX_LIMIT) {
-    throw new Error(
-      `Launch transaction is ${wire.length} bytes (max ${LEGACY_TX_LIMIT}). Shorten the token name or ticker.`,
-    );
-  }
-  const signature = await wallet.sendTransaction(tx, connection, { signers, skipPreflight: false });
-  const latest = await connection.getLatestBlockhash("confirmed");
-  await connection.confirmTransaction(
-    { signature, blockhash: latest.blockhash, lastValidBlockHeight: latest.lastValidBlockHeight },
-    "confirmed",
-  );
-  return signature;
 }
 
 export async function uploadPumpMetadata(args: {
@@ -105,44 +85,56 @@ export async function createPumpToken(args: {
   const global = await sdk.fetchGlobal();
   const feeConfig = await sdk.fetchFeeConfig();
 
-  const createTx = new Transaction().add(
-    await PUMP_SDK.createV2Instruction({
-      mint: mintKeypair.publicKey,
-      name,
-      symbol,
-      uri,
-      creator: user,
-      user,
-      mayhemMode,
-    }),
-  );
-  const signature = await sendAndConfirm(args.connection, args.wallet, createTx, [mintKeypair]);
+  const instructions =
+    args.solBuy > 0
+      ? await PUMP_SDK.createV2AndBuyInstructions({
+          global,
+          mint: mintKeypair.publicKey,
+          name,
+          symbol,
+          uri,
+          creator: user,
+          user,
+          amount: getBuyTokenAmountFromSolAmount({
+            global,
+            feeConfig,
+            mintSupply: null,
+            bondingCurve: null,
+            amount: new BN(Math.round(args.solBuy * 1_000_000_000)),
+            quoteMint: NATIVE_MINT,
+          }),
+          solAmount: new BN(Math.round(args.solBuy * 1_000_000_000)),
+          mayhemMode,
+        })
+      : [
+          await PUMP_SDK.createV2Instruction({
+            mint: mintKeypair.publicKey,
+            name,
+            symbol,
+            uri,
+            creator: user,
+            user,
+            mayhemMode,
+          }),
+        ];
 
-  if (args.solBuy > 0) {
-    const solAmount = new BN(Math.round(args.solBuy * 1_000_000_000));
-    const amount = getBuyTokenAmountFromSolAmount({
-      global,
-      feeConfig,
-      mintSupply: null,
-      bondingCurve: null,
-      amount: solAmount,
-      quoteMint: NATIVE_MINT,
-    });
-    const packed = await PUMP_SDK.createV2AndBuyInstructions({
-      global,
-      mint: mintKeypair.publicKey,
-      name,
-      symbol,
-      uri,
-      creator: user,
-      user,
-      amount,
-      solAmount,
-      mayhemMode,
-    });
-    const buyTx = new Transaction().add(...packed.slice(1));
-    await sendAndConfirm(args.connection, args.wallet, buyTx);
-  }
+  const { blockhash, lastValidBlockHeight } = await args.connection.getLatestBlockhash("confirmed");
+  const tx = new VersionedTransaction(
+    new TransactionMessage({
+      payerKey: user,
+      recentBlockhash: blockhash,
+      instructions,
+    }).compileToV0Message(),
+  );
+  tx.sign([mintKeypair]);
+
+  const signature = await args.wallet.sendTransaction(tx, args.connection, {
+    signers: [mintKeypair],
+  });
+  await args.connection.confirmTransaction(
+    { signature, blockhash, lastValidBlockHeight },
+    "confirmed",
+  );
 
   return { mint: mintKeypair.publicKey, mintKeypair, signature };
 }
