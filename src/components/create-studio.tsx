@@ -5,14 +5,13 @@ import { Keypair } from "@solana/web3.js";
 import { Check, ExternalLink, Info, Lock, Plus, Sparkles, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { GamePromptChat } from "@/components/game-prompt-chat";
 import { RomCabinet } from "@/components/rom-cabinet";
 import { SiteHeader } from "@/components/site-header";
 import { WalletButton } from "@/components/wallet-ui";
-import { apiUrl, readJson } from "@/lib/api";
-import { STUDIO_MAX_DRAFTS, APP_PITCH, CHAT_COOLDOWN_MS, CHAT_MAX_USER_MESSAGES, PUMP_FUN_COIN_URL, SOLSCAN_TOKEN_URL, SOLSCAN_TX_URL } from "@/lib/constants";
+import { STUDIO_MAX_DRAFTS, APP_PITCH, PUMP_FUN_COIN_URL, SOLSCAN_TOKEN_URL, SOLSCAN_TX_URL } from "@/lib/constants";
 import { utf8Bytes } from "@/lib/game-codec";
 import { upsertLaunch, fetchLaunch } from "@/lib/launches-store";
 import {
@@ -28,49 +27,50 @@ import { allocatePlaySlug, playPath, publicPlayUrl, tickerSlug } from "@/lib/sit
 import {
   draftTabLabel,
   emptyDraft,
+  getServerStudioCache,
   isChatCapped,
   isDraftLocked,
+  patchStudioDraft,
   readStudioCache,
-  type StudioCache,
-  type StudioChatMessage,
+  setStudioActiveId,
+  subscribeStudioCache,
   type StudioDraft,
   userPromptCount,
   writeStudioCache,
 } from "@/lib/studio-store";
+import {
+  clearStaleStudioGenerations,
+  isStudioGenerating,
+  startStudioGenerate,
+  studioJobsSnapshot,
+  subscribeStudioJobs,
+} from "@/lib/studio-generate";
 import { dataUrlToPngFile } from "@/lib/token-art";
-import type { GenerateGameResponse, OcgLaunch } from "@/lib/types";
+import type { OcgLaunch } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function CreateStudio() {
   const wallet = useWallet();
-  const [cache, setCache] = useState<StudioCache | null>(null);
-  const [busyById, setBusyById] = useState<Record<string, "generate" | "launch">>({});
+  const cache = useSyncExternalStore(subscribeStudioCache, readStudioCache, getServerStudioCache);
+  const generatingIds = useSyncExternalStore(subscribeStudioJobs, studioJobsSnapshot, studioJobsSnapshot);
+  const [busyById, setBusyById] = useState<Record<string, "launch">>({});
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [buyDraft, setBuyDraft] = useState<string | null>(null);
-  const cacheRef = useRef<StudioCache | null>(null);
-  const busyRef = useRef<Record<string, "generate" | "launch">>({});
+  const busyRef = useRef<Record<string, "launch">>({});
 
   useEffect(() => {
-    const next = readStudioCache();
-    setCache(next);
-    cacheRef.current = next;
+    clearStaleStudioGenerations();
   }, []);
-
-  useEffect(() => {
-    if (!cache) return;
-    cacheRef.current = cache;
-    writeStudioCache(cache);
-  }, [cache]);
 
   useEffect(() => {
     busyRef.current = busyById;
   }, [busyById]);
 
-  const active = cache?.drafts.find((item) => item.id === cache.activeId) ?? cache?.drafts[0] ?? null;
+  const active = cache.drafts.find((item) => item.id === cache.activeId) ?? cache.drafts[0] ?? null;
   const locked = active ? isDraftLocked(active) : false;
   const busy = active ? (busyById[active.id] ?? null) : null;
-  const generating = busy === "generate";
+  const generating = Boolean(active && generatingIds.split(",").filter(Boolean).includes(active.id));
   const showLaunch = Boolean(active?.game);
   const originalPrompt = active?.messages.find((item) => item.role === "user")?.content ?? "";
   const pct = useMemo(() => supplyPctForSol(active?.solBuy ?? 0), [active?.solBuy]);
@@ -79,130 +79,43 @@ export function CreateStudio() {
   const sliderStep = active?.buyMode === "sol" ? 0.01 : 0.1;
 
   const setActiveId = useCallback((id: string) => {
-    setCache((current) => (current ? { ...current, activeId: id } : current));
+    setStudioActiveId(id);
     setError(null);
     setStatus(null);
     setBuyDraft(null);
   }, []);
 
   const patchDraft = useCallback((id: string, partial: Partial<StudioDraft>) => {
-    setCache((current) => {
-      if (!current) return current;
-      return {
-        ...current,
-        drafts: current.drafts.map((item) =>
-          item.id === id ? { ...item, ...partial, updatedAt: Date.now() } : item,
-        ),
-      };
-    });
+    patchStudioDraft(id, partial);
   }, []);
 
   function addTab() {
-    setCache((current) => {
-      if (!current || current.drafts.length >= STUDIO_MAX_DRAFTS) return current;
-      const draft = emptyDraft();
-      return { drafts: [...current.drafts, draft], activeId: draft.id };
-    });
+    const current = readStudioCache();
+    if (current.drafts.length >= STUDIO_MAX_DRAFTS) return;
+    const draft = emptyDraft();
+    writeStudioCache({ drafts: [...current.drafts, draft], activeId: draft.id });
     setError(null);
     setStatus(null);
   }
 
   function closeTab(id: string) {
-    setCache((current) => {
-      if (!current || current.drafts.length <= 1) return current;
-      const index = current.drafts.findIndex((item) => item.id === id);
-      const drafts = current.drafts.filter((item) => item.id !== id);
-      const fallback = drafts[Math.max(0, index - 1)] ?? drafts[0];
-      return {
-        drafts,
-        activeId: current.activeId === id ? fallback.id : current.activeId,
-      };
+    const current = readStudioCache();
+    if (current.drafts.length <= 1) return;
+    const index = current.drafts.findIndex((item) => item.id === id);
+    const drafts = current.drafts.filter((item) => item.id !== id);
+    const fallback = drafts[Math.max(0, index - 1)] ?? drafts[0];
+    writeStudioCache({
+      drafts,
+      activeId: current.activeId === id ? fallback.id : current.activeId,
     });
   }
 
-  async function send(text: string) {
-    const snapshot = cacheRef.current;
-    const draft = snapshot?.drafts.find((item) => item.id === snapshot.activeId);
-    if (!draft || isDraftLocked(draft) || busyRef.current[draft.id]) return;
-    const trimmed = text.trim();
-    if (trimmed.length < 3) return;
-    if (userPromptCount(draft) >= CHAT_MAX_USER_MESSAGES) {
-      setError(`This game used all ${CHAT_MAX_USER_MESSAGES} prompts. Open a new tab.`);
-      return;
-    }
-    if (draft.lastPromptAt && Date.now() - draft.lastPromptAt < CHAT_COOLDOWN_MS) {
-      const wait = Math.ceil((CHAT_COOLDOWN_MS - (Date.now() - draft.lastPromptAt)) / 1000);
-      setError(`Wait ${wait}s before sending another prompt.`);
-      return;
-    }
-    const draftId = draft.id;
-    const userMessage: StudioChatMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: trimmed,
-    };
-    const history = [...draft.messages, userMessage];
-    patchDraft(draftId, { messages: history, composer: "", lastPromptAt: Date.now() });
-    busyRef.current = { ...busyRef.current, [draftId]: "generate" };
-    setBusyById((current) => ({ ...current, [draftId]: "generate" }));
-    setError(null);
-    setStatus(null);
-    try {
-      const response = await fetch(apiUrl("/api/generate-game"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: trimmed,
-          messages: history.map(({ role, content }) => ({ role, content })),
-          html: draft.game?.html,
-          name: draft.name,
-          symbol: draft.symbol,
-          mechanic: draft.game?.mechanic,
-        }),
-      });
-      const json = await readJson<GenerateGameResponse & { error?: string }>(response);
-      if (!response.ok && !json.html) throw new Error(json.error ?? "Could not generate a game.");
-      const reply =
-        json.reply?.trim() ||
-        (draft.game ? "Updated. Play it above." : "Game ready. Play it, then launch.");
-      const latest = cacheRef.current?.drafts.find((item) => item.id === draftId);
-      const currentMessages = latest?.messages ?? history;
-      const last = currentMessages[currentMessages.length - 1];
-      const nextMessages =
-        last?.role === "assistant" && last.content === reply
-          ? currentMessages
-          : [...currentMessages, { id: crypto.randomUUID(), role: "assistant" as const, content: reply }];
-      const firstBuild = !draft.game;
-      patchDraft(draftId, {
-        messages: nextMessages,
-        ...(json.html
-          ? {
-              game: json,
-              name: firstBuild ? json.name : latest?.name || json.name,
-              symbol: firstBuild ? json.symbol : latest?.symbol || json.symbol,
-              description: firstBuild ? trimmed.slice(0, 200) : latest?.description,
-              ...(firstBuild ? { website: "", imagePreview: null, imageCustom: false } : {}),
-            }
-          : {}),
-      });
-      if (cacheRef.current?.activeId === draftId) {
-        setStatus(json.fallback ? json.error ?? "Used a compact fallback ROM." : reply);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Generation failed.";
-      if (cacheRef.current?.activeId === draftId) {
-        setError(
-          message === "Failed to fetch"
-            ? "Could not reach the game API. Check that ocg-api is live."
-            : message,
-        );
-      }
-    } finally {
-      setBusyById((current) => {
-        const next = { ...current };
-        delete next[draftId];
-        return next;
-      });
+  function send(text: string) {
+    const blocked = startStudioGenerate(text);
+    if (blocked) setError(blocked);
+    else {
+      setError(null);
+      setStatus("Building… you can leave this page.");
     }
   }
 
@@ -343,7 +256,7 @@ export function CreateStudio() {
     reader.readAsDataURL(file);
   }
 
-  if (!cache || !active) {
+  if (!active) {
     return (
       <div className="flex h-dvh flex-col overflow-hidden">
         <SiteHeader />
@@ -365,7 +278,7 @@ export function CreateStudio() {
             {cache.drafts.map((draft) => {
               const selected = draft.id === active.id;
               const tabLocked = isDraftLocked(draft);
-              const tabBusy = busyById[draft.id];
+              const tabBusy = Boolean(busyById[draft.id] || isStudioGenerating(draft.id) || draft.generatingStartedAt);
               return (
                 <div
                   key={draft.id}
@@ -753,7 +666,11 @@ export function CreateStudio() {
                 ) : (
                   <WalletButton fullWidth connectLabel="Select wallet to launch" />
                 )}
-                {status && !generating ? <p className="mt-2 text-xs text-positive">{status}</p> : null}
+                {generating ? (
+                  <p className="mt-2 text-xs text-muted-foreground">Building… you can leave this page.</p>
+                ) : status ? (
+                  <p className="mt-2 text-xs text-positive">{status}</p>
+                ) : null}
                 {error ? <p className="mt-2 text-xs text-negative">{error}</p> : null}
               </div>
             </aside>

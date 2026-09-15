@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Search } from "lucide-react";
+import { useSyncExternalStore } from "react";
 
 import { BrandLogo } from "@/components/brand-logo";
 import { WalletButton } from "@/components/wallet-ui";
 import { APP_PITCH, OCG_X_URL } from "@/lib/constants";
+import { studioJobsSnapshot, subscribeStudioJobs } from "@/lib/studio-generate";
 import { cn } from "@/lib/utils";
 
 export function SiteHeader({
@@ -17,6 +19,8 @@ export function SiteHeader({
   onQueryChange?: (value: string) => void;
 }) {
   const pathname = usePathname();
+  const generatingIds = useSyncExternalStore(subscribeStudioJobs, studioJobsSnapshot, studioJobsSnapshot);
+  const building = Boolean(generatingIds);
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur-xl">
@@ -32,6 +36,7 @@ export function SiteHeader({
           </NavLink>
           <NavLink href="/create" active={pathname === "/create"}>
             Create
+            {building ? <span className="ml-1.5 inline-block size-1.5 animate-pulse rounded-full bg-primary" /> : null}
           </NavLink>
         </nav>
 
@@ -97,7 +102,7 @@ function NavLink({
     <Link
       href={href}
       className={cn(
-        "rounded-full px-3 py-1.5 text-sm transition-colors",
+        "inline-flex items-center rounded-full px-3 py-1.5 text-sm transition-colors",
         active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
     >

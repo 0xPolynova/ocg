@@ -26,6 +26,7 @@ export type StudioDraft = {
   buyMode: "pct" | "sol";
   solBuy: number;
   lastPromptAt?: number;
+  generatingStartedAt?: number;
   mint?: string;
   createSignature?: string;
 };
@@ -120,6 +121,7 @@ function parseDraft(value: unknown): StudioDraft | null {
     buyMode: item.buyMode === "pct" ? "pct" : "sol",
     solBuy: typeof item.solBuy === "number" ? item.solBuy : 0,
     lastPromptAt: typeof item.lastPromptAt === "number" ? item.lastPromptAt : undefined,
+    generatingStartedAt: typeof item.generatingStartedAt === "number" ? item.generatingStartedAt : undefined,
     mint: typeof item.mint === "string" ? item.mint : undefined,
     createSignature: typeof item.createSignature === "string" ? item.createSignature : undefined,
   };
@@ -172,12 +174,60 @@ function writeCache(cache: StudioCache): void {
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 
+const SERVER_STUDIO_CACHE: StudioCache = {
+  drafts: [
+    {
+      id: "ssr",
+      createdAt: 0,
+      updatedAt: 0,
+      messages: [],
+      composer: "",
+      game: null,
+      name: "",
+      symbol: "",
+      description: "",
+      imagePreview: null,
+      imageCustom: false,
+      twitter: "",
+      telegram: "",
+      website: "",
+      mayhemMode: false,
+      buyMode: "sol",
+      solBuy: 0,
+    },
+  ],
+  activeId: "ssr",
+};
+
+export function getServerStudioCache(): StudioCache {
+  return SERVER_STUDIO_CACHE;
+}
+
 export function readStudioCache(): StudioCache {
   return readCache();
 }
 
 export function writeStudioCache(cache: StudioCache): void {
   writeCache(cache);
+}
+
+export function patchStudioDraft(id: string, partial: Partial<StudioDraft>): StudioCache {
+  const current = readCache();
+  const next: StudioCache = {
+    ...current,
+    drafts: current.drafts.map((item) =>
+      item.id === id ? { ...item, ...partial, updatedAt: Date.now() } : item,
+    ),
+  };
+  writeCache(next);
+  return next;
+}
+
+export function setStudioActiveId(id: string): StudioCache {
+  const current = readCache();
+  const next: StudioCache = { ...current, activeId: id };
+  writeCache(next);
+  return next;
 }
 
 export function subscribeStudioCache(onChange: () => void): () => void {
