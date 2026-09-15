@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { BrandLogo } from "@/components/brand-logo";
+import { APP_PITCH } from "@/lib/constants";
 
 export function SiteFooter() {
   return (
@@ -18,7 +19,7 @@ export function SiteFooter() {
         <a href="https://pump.fun" className="hover:text-foreground" target="_blank" rel="noreferrer">
           Pump.fun
         </a>
-        <span className="ml-auto">Games on OCG · tokens on Pump.fun</span>
+        <span className="ml-auto">{APP_PITCH}</span>
       </div>
     </footer>
   );

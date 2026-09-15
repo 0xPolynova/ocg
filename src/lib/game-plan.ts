@@ -20,7 +20,7 @@ export const MECHANICS = [
   "custom",
 ] as const;
 
-export type Mechanic = (typeof MECHANICS)[number];
+export type Mechanic = string;
 
 export type GamePlan = {
   title: string;
@@ -33,6 +33,7 @@ export type GamePlan = {
   goal: string;
   fail: string;
   unique: string;
+  loop: string;
   mustDraw: string[];
   hint: string;
 };
@@ -188,11 +189,11 @@ export function cameraFor(mechanic: Mechanic): string {
     case "shooter":
       return "top-down or rail";
     default:
-      return "the camera that idea is famous for";
+      return "the camera that fits this idea";
   }
 }
 
-export const MECHANIC_RECIPES: Record<Mechanic, string> = {
+export const MECHANIC_RECIPES: Record<(typeof MECHANICS)[number], string> = {
   fps: `CAMERA: first-person. LOOP: px,py,pa on a 1/0 grid. WASD with wall collision, arrows turn. For each column, step a ray along cos/sin until a wall and draw a vertical strip height H/dist (shade by distance). Ceiling vs floor colors. Enemies are scaled billboards by angle+distance. Click shoots a hitscan along pa. HP, ammo or kills. Rooms, not an empty box.`,
   snake: `CAMERA: top-down grid. LOOP: snake as [{x,y}…]. Tick: unshift head, pop tail unless food eaten (grow + score). Die on wall or self. Arrows/WASD, no 180 reverse. Food, wrap or walls, rising speed. The body must look like a snake, not dots.`,
   flappy: `CAMERA: side scroller, player X fixed. LOOP: py+=vy; vy+=gravity; click/space flaps vy negative. Pipes with gaps scroll left. Score on pass. Die on pipe/ground/ceiling. Bird with wing/beak, not a circle.`,
@@ -297,13 +298,14 @@ export function pickMechanic(prompt: string): Mechanic {
   return "custom";
 }
 
-export function genreFromMechanic(mechanic: Mechanic): Exclude<Genre, "All"> {
-  if (mechanic === "dodge" || mechanic === "flappy" || mechanic === "rhythm" || mechanic === "runner") {
-    return "Reflex";
-  }
-  if (mechanic === "shooter" || mechanic === "aim" || mechanic === "fps") return "Action";
-  if (mechanic === "maze" || mechanic === "memory" || mechanic === "stacker") return "Puzzle";
-  return "Arcade";
+export function genreFromMechanic(mechanic: string): Exclude<Genre, "All"> {
+  const value = mechanic.toLowerCase();
+  if (/(dodge|flappy|rhythm|runner|reflex)/.test(value)) return "Reflex";
+  if (/(shoot|aim|fps|rpg|combat|fight|doom|action)/.test(value)) return "Action";
+  if (/(maze|memory|stack|puzzle|chess|card|match|sokoban|tetris)/.test(value)) return "Puzzle";
+  if (/(sim|tycoon|idle|farm|city|novel|story|strategy|board)/.test(value)) return "Custom";
+  if (/(snake|pong|breakout|arcade|frogger|collect)/.test(value)) return "Arcade";
+  return "Custom";
 }
 
 export function themeTokens(prompt: string): string[] {
@@ -329,10 +331,8 @@ export function parsePlan(raw: string, prompt: string): GamePlan {
     }
   }
   const hinted = pickMechanic(idea);
-  let mechanic = MECHANICS.includes(parsed.mechanic as Mechanic)
-    ? (parsed.mechanic as Mechanic)
-    : hinted;
-  if (hinted !== "custom") mechanic = hinted;
+  const parsedMechanic = typeof parsed.mechanic === "string" ? parsed.mechanic.trim() : "";
+  const mechanic = parsedMechanic || known?.mechanic || hinted;
   const tokens = themeTokens(idea);
   const title = (
     known?.title ??
@@ -343,19 +343,28 @@ export function parsePlan(raw: string, prompt: string): GamePlan {
     .trim()
     .slice(0, 22)
     .toUpperCase();
+  const opposition =
+    typeof (parsed as { opposition?: string }).opposition === "string"
+      ? (parsed as { opposition?: string }).opposition
+      : undefined;
+  const loop =
+    (typeof parsed.loop === "string" && parsed.loop.trim()) ||
+    known?.brief ||
+    `Play ${idea} using ${parsed.controls ?? known?.controls ?? "keyboard and pointer"}.`;
   return {
     title: title || "OCG",
     mechanic,
     fantasy: parsed.fantasy ?? known?.brief ?? `You are playing ${idea}`,
     camera: parsed.camera ?? known?.camera ?? cameraFor(mechanic),
-    controls: known?.controls ?? parsed.controls ?? "keyboard and pointer",
-    player: known?.player ?? parsed.player ?? tokens[0] ?? "hero",
-    hazards: known?.hazards ?? parsed.hazards ?? "obstacles",
-    goal: parsed.goal ?? "score and survive",
-    fail: parsed.fail ?? "hit a hazard",
-    unique: known?.brief ?? parsed.unique ?? idea,
+    controls: parsed.controls ?? known?.controls ?? "keyboard and pointer",
+    player: parsed.player ?? known?.player ?? tokens[0] ?? "hero",
+    hazards: parsed.hazards ?? opposition ?? known?.hazards ?? "whatever the idea puts against the player",
+    goal: parsed.goal ?? "progress the way the player described",
+    fail: parsed.fail ?? "only if the idea has a fail state",
+    unique: parsed.unique ?? known?.brief ?? idea,
+    loop,
     mustDraw: parsed.mustDraw?.length ? parsed.mustDraw.slice(0, 6) : tokens.slice(0, 4),
-    hint: known?.controls ?? parsed.hint ?? parsed.controls ?? "click to start",
+    hint: parsed.hint ?? parsed.controls ?? known?.controls ?? "click to start",
   };
 }
 

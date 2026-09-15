@@ -1,87 +1,84 @@
 import { TARGET_RAW_BYTES } from "./constants";
-import { cameraFor, famousGame, MECHANIC_RECIPES, type GamePlan } from "./game-plan";
+import { famousGame, type GamePlan } from "./game-plan";
 
 export function planSystemPrompt(): string {
-  return `You are a game director shipping a finished arcade game, not a prototype.
+  return `You are a game director. The player's typed idea is the entire spec. Do not force an arcade template, a death loop, or a genre from a list.
 
 Return ONLY JSON:
-{"title":"SHOUTY TITLE","mechanic":"fps|snake|flappy|shooter|platformer|frogger|pong|breakout|dodge|collector|maze|rhythm|aim|stacker|runner|memory|custom","fantasy":"who the player is and what world this is","camera":"first-person|side|top-down|rail|…","controls":"exact keys/clicks","player":"how the avatar looks, body parts","hazards":"what kills/blocks, how it looks","goal":"how score increases","fail":"how you die","unique":"the one verb + camera that makes this THAT game","mustDraw":["prop 1","prop 2","prop 3"],"hint":"one-line how to play"}
+{"title":"SHOUTY TITLE","mechanic":"the rules of THIS game in a few words, copied from the player","fantasy":"who the player is and what world this is","camera":"whatever this game needs","controls":"exact keys/clicks/taps","player":"how the avatar or pieces look","opposition":"what they play against, or none","goal":"how you win, progress, or score — only if this game has that","fail":"how you lose, or none","loop":"2-4 sentences: what happens each moment of play, including turns/combat/puzzles/building if they asked for that","mustDraw":["prop 1","prop 2","prop 3"],"hint":"one-line how to play"}
 
 Design rules:
-- The typed idea is law. If they named a famous game, clone its camera and verb (Doom = FPS corridors + shotgun, Mario = side jump, Tetris = tetrominoes, Pac-Man = maze pellets, Snake = growing body).
-- Fantasy must be a sentence a player would feel ("you are a marine in a demon base"), not "arcade game".
-- mustDraw are concrete shapes (shotgun, horns, pipes, mushroom, log), not "player" or "enemy".
-- Never pick snake/dodge/pong unless that is actually the idea.`;
+- The typed idea is law. Chess is chess. A tycoon is a tycoon. An RPG has maps, stats, and encounters. A novel-like game has scenes and choices. A sports game has a match. Only clone a famous title if they named it.
+- mechanic is a free-form label in their words (not snake/dodge/flappy unless they asked for those).
+- fail may be "none". Not every game kills the player or has a game-over screen.
+- never replace their idea with a generic dodge/snake/pong.`;
 }
 
 export function implementSystemPrompt(plan: GamePlan, idea: string): string {
   const known = famousGame(idea);
-  return `You ship finished HTML5 arcade games people actually play, not 80-line canvas stubs.
+  return `You ship finished HTML5 canvas games people actually play. Any genre the player described — arcade, RPG, strategy, puzzle, sim, cards, sports, idle, narrative, FPS, whatever they typed.
 
 Write ONE complete HTML5 canvas game. Output ONLY the HTML document. No markdown, no fences, no apology.
 
 PLAYER ASKED FOR: "${idea}"
-That is the game. A stranger watching for five seconds must recognize it. If this could be mistaken for a generic dodge/snake/pong, you failed.
+That is the game. A stranger watching for five seconds must recognize it. If this could be mistaken for a generic falling-object dodge when they asked for something else, you failed.
 
 DESIGN DOC
 - Title: ${plan.title}
 - Fantasy: ${plan.fantasy}
-- Camera: ${plan.camera} (${cameraFor(plan.mechanic)})
-- Mechanic: ${plan.mechanic}
+- Camera: ${plan.camera}
+- Mechanic (their rules): ${plan.mechanic}
 - Controls: ${plan.controls}
-- Avatar: ${plan.player}
+- Pieces / avatar: ${plan.player}
 - Opposition: ${plan.hazards}
-- Score: ${plan.goal}
-- Death: ${plan.fail}
+- Progress / win: ${plan.goal}
+- Lose / fail: ${plan.fail}
 - Unique: ${plan.unique}
+- Play loop: ${plan.loop}
 - Must draw: ${plan.mustDraw.join(", ")}
-${known ? `- Famous-game lock: ${known.brief}` : ""}
+${known ? `- They named a known game — match its feel: ${known.brief}` : ""}
 
-HOW THIS GENRE WORKS — follow this loop, not a different one
-${MECHANIC_RECIPES[plan.mechanic]}
+HOW THIS GAME WORKS
+Invent the systems from the play loop above. Do not paste a score-and-die arcade unless that is what they asked for.
+If they want turns, inventory, dialogue, board pieces, resources, levels, or a match clock — implement those.
+If they want a title screen and retry, include them. If they want an open session with no game-over, skip game-over.
 
 CODE SHAPE (required)
-One HTML document. Put a <canvas id=c> in the body, then one script. Draw the HUD with fillText on the canvas. Do not use extra DOM, innerText, getElementById for UI, or overlay divs.
-The host aliases canvas, cv, c, and ctx (2d). Use those.
-VIEWPORT: on boot and resize set canvas.width=innerWidth; canvas.height=innerHeight. Every frame let W=innerWidth,H=innerHeight. NEVER hardcode 320/400/640. fillRect(0,0,W,H) the whole world.
-Split drawing into named functions: drawWorld, drawPlayer, drawHazards, drawHUD, drawTitle, drawOver. Keep entities in arrays. Do not dump the whole game into one anonymous loop.
-let mode=0; // 0 title, 1 play, 2 over
-let score=0,best=0;
-function reset(){ /* rebuild world, score=0, mode=1 */ }
-onkeydown / onpointerdown:
-  if(mode!==1){ reset(); beep(880,.08); return }
-  else apply ${plan.controls}
-requestAnimationFrame loop:
-  if(mode===0) drawTitle()
-  else if(mode===2) drawOver()
-  else simulate the ${plan.mechanic} loop, drawWorld/Player/Hazards/HUD
-On death: shake(10); burst(...); beep(120,.2); mode=2; best=Math.max(best,score)
+One HTML document. Put <canvas id="c"> in the body, then one <script>.
+Boot with:
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+  function size(){ canvas.width = innerWidth; canvas.height = innerHeight; }
+  size(); addEventListener("resize", size);
+Every frame let W = canvas.width, H = canvas.height. fillRect(0,0,W,H) the world. NEVER hardcode 320/400/640 as the world size.
+Split drawing into named functions. Keep entities / pieces / rooms in arrays or maps. Do not dump the whole game into one anonymous loop.
+Draw HUD, menus, and text with ctx.fillText on the canvas (not extra DOM).
+requestAnimationFrame (or a turn renderer that still paints every frame) is mandatory.
+Input must work the first second: ${plan.controls}
 
-WHAT "FINISHED" MEANS (all required)
-1. Title screen → play → die → retry.
-2. Silhouette sprites (not one circle for everything).
-3. A world that fills the frame: floor/sky/walls/rooms/lanes.
-4. Difficulty ramp.
-5. Juice: beep, burst, shake on start, score, hit, death.
-6. Playable for 30+ seconds. At least one setpiece.
+WHAT "FINISHED" MEANS
+1. The described game is playable end to end — not a stub of rectangles.
+2. Silhouettes and props match the idea (not one circle for everything).
+3. The world fills the frame.
+4. If the idea has difficulty, levels, or a match — include that progression.
+5. Optional juice: beep(freq, dur), burst(x,y,color), shake(n) already exist on window. Call them. Do not declare functions named beep, burst, or shake.
+6. Someone can play for 30+ seconds and tell what the game is.
 
-HARD RULES — breaking any of these ships a dead game
-- Never declare beep, burst, shake, canvas, cv, ctx, or localStorage (let/const/var/function). The host already provides them.
-- Never HUD via DOM (no innerText, innerHTML, getElementById for score). fillText on the canvas only.
-- requestAnimationFrame loop is mandatory. Title (mode 0) → play (1) → death (2) → click/key retries.
-- Collisions must actually score or kill. If the player cannot die or cannot score, you failed.
-- Movement must be visible the first second after start.
+HARD RULES
+- Do not declare function/var/let/const named beep, burst, or shake.
+- Collisions, turns, captures, purchases, or choices that the idea requires must actually change the game.
+- Movement, selection, or the first verb must be visible immediately after start.
 
 BUDGET
 - Write a finished game in one pass. About ${TARGET_RAW_BYTES} characters is enough. Do not pad.
-- No external URLs, images, fonts, or libraries. Keep best in a variable named best; localStorage is already stubbed.
+- No external URLs, images, fonts, or libraries.
 - Palette: bg #041014, player #8fd4de, good #3ddc8e, bad #f07178, accent #f8d36a, text #e8fbff.
 
-Build "${idea}" as a real ${plan.mechanic} game with a ${plan.camera} camera.`;
+Build "${idea}" as the game they described, with a ${plan.camera} camera.`;
 }
 
 export function implementUserPrompt(plan: GamePlan, idea: string): string {
-  return `Ship the finished "${plan.title}" game now. Camera is ${plan.camera}. Mechanic is ${plan.mechanic}. Fantasy: ${plan.fantasy}. Output ONLY the HTML document for "${idea}".`;
+  return `Ship the finished "${plan.title}" game now. Mechanic: ${plan.mechanic}. Loop: ${plan.loop}. Fantasy: ${plan.fantasy}. Output ONLY the HTML document for "${idea}".`;
 }
 
 export function reviseSystemPrompt(plan: GamePlan, idea: string): string {
@@ -89,14 +86,15 @@ export function reviseSystemPrompt(plan: GamePlan, idea: string): string {
 
 PLAYER'S ORIGINAL IDEA: "${idea}"
 DESIGN: ${plan.title} · ${plan.mechanic} · ${plan.camera} · ${plan.fantasy}
+LOOP: ${plan.loop}
 
 RULES
 - Output ONLY one complete HTML document. No markdown, no fences, no chat.
 - Apply the latest user request to the CURRENT GAME they already have. Do not start over unless they ask for a new game.
-- Keep title/play/game-over, viewport fill (innerWidth/innerHeight), juice, and the host aliases canvas/cv/c/ctx.
+- Keep viewport fill (innerWidth/innerHeight) and a working play loop.
 - Palette: bg #041014, player #8fd4de, good #3ddc8e, bad #f07178, accent #f8d36a, text #e8fbff.
 - No external URLs, images, fonts, or libraries.
-- Never redeclare beep/burst/shake/canvas/ctx. Draw HUD on the canvas. Keep a working title/play/over loop.
+- Never redeclare beep/burst/shake. Draw HUD on the canvas.
 
 Apply their change. Ship the full updated HTML.`;
 }
@@ -107,7 +105,7 @@ export function reviseUserPrompt(request: string, html: string): string {
 }
 
 export function polishPrompt(plan: GamePlan, idea: string): string {
-  return `This is still too small. Keep ${plan.mechanic} + title "${plan.title}" + camera ${plan.camera}, but DOUBLE the drawing code: better sprites for ${plan.player} and ${plan.hazards}, a full world, title/play/game-over, ramp, HUD, juice. Target ${TARGET_RAW_BYTES} characters. It must still be recognizably "${idea}". Output ONLY HTML.`;
+  return `This is still too small. Keep "${plan.title}" and the player's idea "${idea}" (${plan.mechanic}), but DOUBLE the drawing and systems: better sprites, a full world, the real loop (${plan.loop}), and the win/lose they asked for. Target ${TARGET_RAW_BYTES} characters. Output ONLY HTML.`;
 }
 
 export function repairPrompt(plan: GamePlan, idea: string, issues: string[]): string {
@@ -116,15 +114,14 @@ export function repairPrompt(plan: GamePlan, idea: string, issues: string[]): st
 BROKEN BECAUSE:
 ${issues.map((item) => `- ${item}`).join("\n")}
 
-Required: canvas#c, requestAnimationFrame loop, title/play/game-over, working collisions, fillText HUD, no innerText, do not declare beep/burst/shake. Take the extra time. It must actually play.`;
+Required: canvas#c, getContext("2d"), requestAnimationFrame loop, working input, the play loop they asked for. Do not declare beep/burst/shake. Take the extra time. It must actually play.`;
 }
 
 export function expandPrompt(plan: GamePlan, idea: string): string {
-  return `Continue from this game but expand it. Do not restart from a stub. Add more world, more sprite detail, more entities, and more juice for "${idea}" (${plan.mechanic}, ${plan.camera}). Final HTML must be at least ${TARGET_RAW_BYTES} characters. Output ONLY the full HTML document.`;
+  return `Continue from this game but expand it. Do not restart from a stub. Add more world, more sprite detail, more systems for "${idea}" (${plan.mechanic}, ${plan.camera}). Final HTML must be at least ${TARGET_RAW_BYTES} characters. Output ONLY the full HTML document.`;
 }
 
 export function wrongGamePrompt(plan: GamePlan, idea: string): string {
   const known = famousGame(idea);
-  return `YOU BUILT THE WRONG GAME. Throw it out. The player asked for "${idea}" — mechanic ${plan.mechanic}, camera ${plan.camera}. Title fillText must be "${plan.title}". ${known?.brief ?? plan.unique} Use the full budget. Output ONLY HTML.`;
+  return `YOU BUILT THE WRONG GAME. Throw it out. The player asked for "${idea}" — ${plan.mechanic}, camera ${plan.camera}. Title fillText must be "${plan.title}". ${known?.brief ?? plan.unique} Use the full budget. Output ONLY HTML.`;
 }
-

@@ -18,14 +18,8 @@ export function diagnoseGame(html: string): string[] {
   if (script.length < 900) {
     issues.push(`Game script is only ${script.length} characters — too small to be a finished playable game.`);
   }
-  if (/\.innerText|\.innerHTML|\.textContent\s*=/.test(script)) {
-    issues.push("Do not update HUD with innerText/innerHTML. Draw score and titles with ctx.fillText on the canvas.");
-  }
-  if (/\blocalStorage\b/.test(script) && /localStorage\.[gs]etItem/.test(script)) {
-    issues.push("Do not call localStorage yourself. Keep high score in a variable named best.");
-  }
-  if (/\b(let|const|var|function)\s+(shake|beep|burst|canvas|cv|ctx)\b/.test(script)) {
-    issues.push("Do not declare beep, burst, shake, canvas, cv, or ctx — the host already provides them as globals.");
+  if (/\b(let|const|var|function)\s+(shake|beep|burst)\b/.test(script)) {
+    issues.push("Do not declare beep, burst, or shake — the host already provides them as globals.");
   }
   try {
     // eslint-disable-next-line @typescript-eslint/no-implied-eval

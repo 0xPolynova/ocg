@@ -6,7 +6,7 @@ import { Search } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand-logo";
 import { WalletButton } from "@/components/wallet-ui";
-import { APP_TAGLINE, OCG_X_URL } from "@/lib/constants";
+import { APP_PITCH, OCG_X_URL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 export function SiteHeader({
@@ -23,7 +23,7 @@ export function SiteHeader({
       <div className="mx-auto flex h-16 max-w-[1400px] items-center gap-4 px-4 md:px-6">
         <Link href="/" className="flex shrink-0 items-center gap-2">
           <BrandLogo priority className="h-8 w-auto" />
-          <span className="hidden text-xs text-muted-foreground sm:inline">{APP_TAGLINE}</span>
+          <span className="hidden text-xs text-muted-foreground sm:inline">{APP_PITCH}</span>
         </Link>
 
         <nav className="flex items-center gap-1">

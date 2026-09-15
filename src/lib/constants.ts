@@ -1,15 +1,15 @@
 export const APP_NAME = "OCG";
 export const APP_TAGLINE = "OnChainGame";
-export const APP_DESCRIPTION =
-  "Prompt, play, launch a token on Pump.fun.";
+export const APP_PITCH = "Build, launch, Play.";
+export const APP_DESCRIPTION = "Build, launch, Play.";
 
 /** Soft target for generated HTML. One model pass, not a novella. */
-export const TARGET_RAW_BYTES = 14000;
+export const TARGET_RAW_BYTES = 18000;
 
-export const OPENROUTER_MODEL_DEFAULT = "qwen/qwen3-coder";
-/** HTML game coder — full Qwen3 Coder, still cheap vs frontier models. */
-export const OPENROUTER_CODE_MODEL_DEFAULT = "qwen/qwen3-coder";
-export const OPENROUTER_FALLBACK_MODEL = "google/gemini-2.5-flash";
+export const OPENROUTER_MODEL_DEFAULT = "deepseek/deepseek-v3.2";
+/** HTML game coder — DeepSeek V3.2, cheap and strong at complete files. */
+export const OPENROUTER_CODE_MODEL_DEFAULT = "deepseek/deepseek-v3.2";
+export const OPENROUTER_FALLBACK_MODEL = "z-ai/glm-5.3-flash";
 
 export const PUMP_FUN_COIN_URL = "https://pump.fun/coin";
 export const SOLSCAN_TOKEN_URL = "https://solscan.io/token";

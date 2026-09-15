@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 
 import { WalletProviders } from "@/components/wallet-providers";
-import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE } from "@/lib/constants";
+import { APP_DESCRIPTION, APP_NAME, APP_PITCH } from "@/lib/constants";
 
 import "./globals.css";
 
@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: `${APP_NAME} · ${APP_TAGLINE}`,
+  title: `${APP_NAME} · ${APP_PITCH}`,
   description: APP_DESCRIPTION,
   icons: {
     icon: "/logos/weblogoocg.png",

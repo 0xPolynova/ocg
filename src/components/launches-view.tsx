@@ -6,6 +6,7 @@ import Link from "next/link";
 import { FilterChips, LaunchCard } from "@/components/launch-card";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { APP_PITCH } from "@/lib/constants";
 import {
   fetchMarketCaps,
   hydrateLaunches,
@@ -63,8 +64,8 @@ export function LaunchesView() {
         <div className="max-w-2xl">
           <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Launch games</h1>
           <p className="mt-2 text-muted-foreground">
-            Create and discover playable games. Each launch hosts the game on OCG and mints a
-            Pump.fun token whose metadata points at the play URL.
+            {APP_PITCH} Build any game you can describe, host it on OCG, and mint a Pump.fun token
+            whose metadata points at the play URL.
           </p>
         </div>
 

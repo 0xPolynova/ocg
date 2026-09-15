@@ -12,7 +12,7 @@ import { RomCabinet } from "@/components/rom-cabinet";
 import { SiteHeader } from "@/components/site-header";
 import { WalletButton } from "@/components/wallet-ui";
 import { apiUrl } from "@/lib/api";
-import { STUDIO_MAX_DRAFTS, CHAT_COOLDOWN_MS, CHAT_MAX_USER_MESSAGES, PUMP_FUN_COIN_URL, SOLSCAN_TOKEN_URL, SOLSCAN_TX_URL } from "@/lib/constants";
+import { STUDIO_MAX_DRAFTS, APP_PITCH, CHAT_COOLDOWN_MS, CHAT_MAX_USER_MESSAGES, PUMP_FUN_COIN_URL, SOLSCAN_TOKEN_URL, SOLSCAN_TX_URL } from "@/lib/constants";
 import { utf8Bytes } from "@/lib/game-codec";
 import { upsertLaunch, fetchLaunch } from "@/lib/launches-store";
 import {
@@ -359,7 +359,7 @@ export function CreateStudio() {
         <div className="mb-2 flex min-h-0 shrink-0 items-center gap-3">
           <div className="shrink-0">
             <h1 className="text-base font-semibold tracking-tight">Create</h1>
-            <p className="hidden text-xs text-muted-foreground sm:block">Prompt, play, launch.</p>
+            <p className="hidden text-xs text-muted-foreground sm:block">{APP_PITCH}</p>
           </div>
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
             {cache.drafts.map((draft) => {
@@ -702,7 +702,7 @@ export function CreateStudio() {
                       exit={{ opacity: 0 }}
                       className="mt-3 text-xs text-muted-foreground"
                     >
-                      Prompt a game first. Name, ticker, and image lock in at mint.
+                      Build a game first. Name, ticker, and image lock in at mint.
                     </motion.p>
                   )}
                 </AnimatePresence>

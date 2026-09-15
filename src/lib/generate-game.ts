@@ -7,13 +7,11 @@ import { compressGame, utf8Bytes } from "./game-codec";
 import {
   famousGame,
   genreFromMechanic,
-  MECHANICS,
   normalizeIdea,
   parsePlan,
   pickMechanic,
   tickerFromPlan,
   type GamePlan,
-  type Mechanic,
 } from "./game-plan";
 import {
   implementSystemPrompt,
@@ -33,6 +31,19 @@ import type { GenerateGameRequest, GenerateGameResponse } from "./types";
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
 const CODE_TOKENS = 16000;
+
+const LEGACY_CODE_MODELS = new Set([
+  "qwen/qwen3-coder",
+  "qwen/qwen3-coder-next",
+  "qwen/qwen3-coder-flash",
+  "qwen/qwen3-coder-plus",
+]);
+
+function resolveModel(envValue: string | undefined, fallback: string): string {
+  const value = envValue?.trim();
+  if (!value || LEGACY_CODE_MODELS.has(value)) return fallback;
+  return value;
+}
 
 async function chat(
   apiKey: string,
@@ -123,8 +134,9 @@ function pack(
   };
 }
 
-function asMechanic(value: string | undefined, fallback: Mechanic): Mechanic {
-  return value && (MECHANICS as readonly string[]).includes(value) ? (value as Mechanic) : fallback;
+function keepMechanic(value: string | undefined, fallback: string): string {
+  const trimmed = value?.trim();
+  return trimmed || fallback;
 }
 
 function lastUserText(messages: { role: string; content: string }[], fallback: string): string {
@@ -167,12 +179,12 @@ export async function generateGameFromChat(input: GenerateGameRequest): Promise<
   }
 
   const apiKey = process.env.OPENROUTER_API_KEY;
-  const planModel = process.env.OPENROUTER_MODEL ?? OPENROUTER_MODEL_DEFAULT;
-  const codeModel = process.env.OPENROUTER_CODE_MODEL ?? OPENROUTER_CODE_MODEL_DEFAULT;
+  const planModel = resolveModel(process.env.OPENROUTER_MODEL, OPENROUTER_MODEL_DEFAULT);
+  const codeModel = resolveModel(process.env.OPENROUTER_CODE_MODEL, OPENROUTER_CODE_MODEL_DEFAULT);
   const idea = normalizeIdea(messages.find((item) => item.role === "user")?.content.trim() || trimmed);
   const hinted = pickMechanic(idea);
   const localPlan: GamePlan = parsePlan("{}", idea);
-  localPlan.mechanic = asMechanic(input.mechanic, hinted);
+  localPlan.mechanic = keepMechanic(input.mechanic, hinted);
   const revising = Boolean(input.html && /<canvas/i.test(input.html));
 
   if (!apiKey) {
@@ -186,21 +198,16 @@ export async function generateGameFromChat(input: GenerateGameRequest): Promise<
     );
     result.name = demo.name;
     result.symbol = demo.symbol;
-    result.error = "Missing OPENROUTER_API_KEY — used a local arcade fallback.";
+    result.error = "Missing OPENROUTER_API_KEY — used a local playable fallback.";
     return { status: 200, body: result };
   }
 
   try {
-    const known = famousGame(idea);
     let plan: GamePlan;
     if (revising) {
       plan = parsePlan("{}", idea);
-      if (input.mechanic) plan.mechanic = asMechanic(input.mechanic, plan.mechanic);
-      else if (hinted !== "custom") plan.mechanic = hinted;
+      plan.mechanic = keepMechanic(input.mechanic, plan.mechanic);
       if (input.name) plan.title = input.name.toUpperCase();
-    } else if (known || hinted !== "custom") {
-      plan = parsePlan("{}", idea);
-      if (hinted !== "custom") plan.mechanic = hinted;
     } else {
       const planned = await withModelFallback(
         apiKey,
@@ -210,12 +217,19 @@ export async function generateGameFromChat(input: GenerateGameRequest): Promise<
           { role: "system", content: planSystemPrompt() },
           {
             role: "user",
-            content: `The player typed: "${trimmed}"\nNormalized idea: "${idea}"\nIf a mechanic is obvious use ${hinted}. Do not replace their idea with snake or dodge.`,
+            content: `The player typed: "${trimmed}"\nNormalized idea: "${idea}"\nDescribe THIS game's real rules. Do not replace their idea with snake, dodge, or a stock arcade template.`,
           },
         ],
-        { temperature: 0.25, maxTokens: 500 },
+        { temperature: 0.2, maxTokens: 700 },
       );
       plan = parsePlan(planned.text, idea);
+      if (famousGame(idea) && (!plan.loop || plan.mechanic === "custom")) {
+        const known = famousGame(idea);
+        if (known) {
+          plan.mechanic = keepMechanic(plan.mechanic === "custom" ? known.mechanic : plan.mechanic, known.mechanic);
+          if (!plan.loop || plan.loop.startsWith("Play ")) plan.loop = known.brief;
+        }
+      }
     }
 
     let made = revising

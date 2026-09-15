@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, LoaderCircle, Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { CHAT_COOLDOWN_MS, CHAT_MAX_USER_MESSAGES } from "@/lib/constants";
+import { APP_PITCH, CHAT_COOLDOWN_MS, CHAT_MAX_USER_MESSAGES } from "@/lib/constants";
 import type { StudioChatMessage } from "@/lib/studio-store";
 import { cn } from "@/lib/utils";
 
@@ -16,24 +16,24 @@ const STARTERS = [
     prompt: "A one-button dodge game where a cat weaves through falling moons",
   },
   {
-    label: "Neon Snake",
-    prompt: "Neon snake in a shrinking box — eat bits, don't hit the tail",
+    label: "Tiny RPG",
+    prompt: "Top-down pixel RPG: overworld, three dungeons, sword combat, NPCs with shops",
   },
   {
-    label: "Asteroids",
-    prompt: "Tiny spaceship blasting incoming asteroids, one-tap fire",
+    label: "Chess",
+    prompt: "Playable chess with legal moves, check, checkmate, and a greedy AI opponent",
   },
   {
-    label: "Toxic Frog",
-    prompt: "Frog hopping logs across a toxic canal, miss and splash",
+    label: "Tycoon",
+    prompt: "Idle lemonade tycoon: buy stands, upgrades, and watch cash grow",
   },
   {
-    label: "Pipe Bird",
-    prompt: "Flappy bird through neon pipes, tap to flap, don't clip the gap",
+    label: "Card Duel",
+    prompt: "Turn-based card battler: draw, energy, minions, and a boss across the table",
   },
   {
-    label: "Memory Pulse",
-    prompt: "Simon-style memory game: repeat the glowing pad sequence",
+    label: "Farm Plot",
+    prompt: "Tiny farming sim: plant, water, harvest, sell, and expand the plot",
   },
   {
     label: "DOOM",
@@ -93,7 +93,7 @@ export function GamePromptChat({
     : capped
       ? `Used all ${CHAT_MAX_USER_MESSAGES} prompts. Open a new tab.`
       : empty
-        ? "Prompt, then iterate. One message every 30s · 10 per game."
+        ? `${APP_PITCH} Describe any game. One message every 30s · 10 per game.`
         : waitMs > 0
           ? `Wait ${waitSec}s · ${userPromptCount}/${CHAT_MAX_USER_MESSAGES} prompts`
           : `${userPromptCount}/${CHAT_MAX_USER_MESSAGES} prompts used`;
@@ -187,7 +187,7 @@ export function GamePromptChat({
                   submit();
                 }
               }}
-              placeholder={empty ? "A microscopic snake game with neon walls" : "Make the player faster, add a boss…"}
+              placeholder={empty ? "Describe any game you want to build…" : "Make the player faster, add a boss…"}
               className="max-h-24 min-h-[36px] flex-1 resize-none bg-transparent py-1 text-sm outline-none"
             />
             <button

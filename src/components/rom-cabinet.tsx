@@ -47,7 +47,7 @@ export function RomCabinet({
           {generating ? (game ? "Updating game" : "Building game") : title || "Preview"}
         </p>
         <p className="shrink-0 text-xs text-muted-foreground">
-          {locked ? "Launched" : generating ? "Working" : game ? "Ready to play" : "Waiting for a prompt"}
+          {locked ? "Launched" : generating ? "Working" : game ? "Ready to play" : "Describe a game"}
         </p>
       </div>
       <div className="relative min-h-0 flex-1 bg-background">
