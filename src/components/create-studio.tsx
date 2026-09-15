@@ -45,6 +45,7 @@ export function CreateStudio() {
   const [busyById, setBusyById] = useState<Record<string, "generate" | "launch">>({});
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [buyDraft, setBuyDraft] = useState<string | null>(null);
   const cacheRef = useRef<StudioCache | null>(null);
   const busyRef = useRef<Record<string, "generate" | "launch">>({});
 
@@ -79,6 +80,7 @@ export function CreateStudio() {
     setCache((current) => (current ? { ...current, activeId: id } : current));
     setError(null);
     setStatus(null);
+    setBuyDraft(null);
   }, []);
 
   const patchDraft = useCallback((id: string, partial: Partial<StudioDraft>) => {
@@ -296,11 +298,30 @@ export function CreateStudio() {
     }
   }
 
-  function onBuySlider(value: number) {
+  function applyBuy(value: number, typed?: string) {
     if (!active || locked) return;
+    const clamped = Math.min(sliderMax, Math.max(0, value));
+    setBuyDraft(typed ?? null);
     patchDraft(active.id, {
-      solBuy: active.buyMode === "sol" ? value : solForSupplyPct(value),
+      solBuy: active.buyMode === "sol" ? clamped : solForSupplyPct(clamped),
     });
+  }
+
+  function onBuySlider(value: number) {
+    applyBuy(value);
+  }
+
+  function onBuyTyped(raw: string) {
+    if (raw.trim() === "") {
+      applyBuy(0, raw);
+      return;
+    }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setBuyDraft(raw);
+      return;
+    }
+    applyBuy(parsed, raw);
   }
 
   function onImageFile(file: File | null) {
@@ -528,12 +549,12 @@ export function CreateStudio() {
                       type="button"
                       disabled={locked}
                       onClick={() => patchDraft(active.id, { mayhemMode: !active.mayhemMode })}
-                      className="flex w-full items-start gap-2 rounded-lg border border-border bg-background/60 px-2.5 py-2 text-left disabled:opacity-60"
+                      className="flex w-full flex-nowrap items-center gap-2 rounded-lg border border-border bg-background/60 px-2.5 py-2 text-left disabled:opacity-60"
                       aria-pressed={active.mayhemMode}
                     >
                       <span
                         className={cn(
-                          "mt-0.5 grid size-4 shrink-0 place-items-center rounded border",
+                          "grid size-4 shrink-0 place-items-center rounded border",
                           active.mayhemMode
                             ? "border-cyan bg-cyan text-[#041014]"
                             : "border-border bg-background",
@@ -542,10 +563,8 @@ export function CreateStudio() {
                       >
                         {active.mayhemMode ? <Check className="size-3 stroke-[3]" /> : null}
                       </span>
-                      <span>
-                        <span className="block text-xs font-medium">Mayhem mode</span>
-                        <span className="text-[11px] text-muted-foreground">Only set at create.</span>
-                      </span>
+                      <span className="shrink-0 text-xs font-medium">Mayhem mode</span>
+                      <span className="truncate text-[11px] text-muted-foreground">Only set at create.</span>
                     </button>
 
                     <div>
@@ -555,29 +574,55 @@ export function CreateStudio() {
                           <Toggle
                             active={active.buyMode === "sol"}
                             disabled={locked}
-                            onClick={() => patchDraft(active.id, { buyMode: "sol" })}
+                            onClick={() => {
+                              setBuyDraft(null);
+                              patchDraft(active.id, { buyMode: "sol" });
+                            }}
                           >
                             SOL
                           </Toggle>
                           <Toggle
                             active={active.buyMode === "pct"}
                             disabled={locked}
-                            onClick={() => patchDraft(active.id, { buyMode: "pct" })}
+                            onClick={() => {
+                              setBuyDraft(null);
+                              patchDraft(active.id, { buyMode: "pct" });
+                            }}
                           >
                             %
                           </Toggle>
                         </div>
                       </div>
-                      <input
-                        className="ocg-slider"
-                        type="range"
-                        min={0}
-                        max={sliderMax}
-                        step={sliderStep}
-                        value={sliderValue}
-                        disabled={locked}
-                        onChange={(event) => onBuySlider(Number(event.target.value))}
-                      />
+                      <div className="flex items-center gap-2">
+                        <input
+                          className="ocg-slider min-w-0 flex-1"
+                          type="range"
+                          min={0}
+                          max={sliderMax}
+                          step={sliderStep}
+                          value={sliderValue}
+                          disabled={locked}
+                          onChange={(event) => onBuySlider(Number(event.target.value))}
+                        />
+                        <div className="relative w-[5.5rem] shrink-0">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            disabled={locked}
+                            value={
+                              buyDraft ??
+                              (active.buyMode === "sol" ? active.solBuy.toFixed(3) : pct.toFixed(2))
+                            }
+                            onChange={(event) => onBuyTyped(event.target.value)}
+                            onBlur={() => setBuyDraft(null)}
+                            className="h-8 w-full rounded-lg border border-border bg-background px-2 pr-7 text-right text-xs outline-none focus:border-primary/50 disabled:opacity-60"
+                            aria-label={active.buyMode === "sol" ? "Dev buy in SOL" : "Dev buy percent of supply"}
+                          />
+                          <span className="pointer-events-none absolute inset-y-0 right-2 grid place-items-center text-[10px] text-muted-foreground">
+                            {active.buyMode === "sol" ? "SOL" : "%"}
+                          </span>
+                        </div>
+                      </div>
                       <p className="mt-1 text-[11px] text-muted-foreground">
                         {active.solBuy.toFixed(3)} SOL · {pct.toFixed(2)}% of 1B
                         {active.solBuy > 0 ? ` · ~${formatTokenAmount(active.solBuy)} tokens` : ""}

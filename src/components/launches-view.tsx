@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 
 import { FilterChips, LaunchCard } from "@/components/launch-card";
-import { PlayModal } from "@/components/play-modal";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { hydrateLaunches, readLaunches, subscribeLaunches, getEmptyLaunches } from "@/lib/launches-store";
@@ -16,7 +15,6 @@ export function LaunchesView() {
   const [genre, setGenre] = useState("All");
   const stored = useSyncExternalStore(subscribeLaunches, readLaunches, getEmptyLaunches);
   const [stats, setStats] = useState<Record<string, Partial<OcgLaunch>>>({});
-  const [playing, setPlaying] = useState<OcgLaunch | null>(null);
   const mintKey = stored.map((item) => item.mint ?? "").join("|");
 
   async function applyStats(mint: string, coin: Awaited<ReturnType<typeof fetchPumpStats>>) {
@@ -117,7 +115,6 @@ export function LaunchesView() {
               <LaunchCard
                 key={launch.id}
                 launch={launch}
-                onPlay={setPlaying}
                 onRefresh={refreshLaunch}
               />
             ))
@@ -125,7 +122,6 @@ export function LaunchesView() {
         </div>
       </main>
       <SiteFooter />
-      {playing ? <PlayModal launch={playing} onClose={() => setPlaying(null)} /> : null}
     </div>
   );
 }

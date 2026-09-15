@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, Play, RefreshCw, Share2 } from "lucide-react";
+import Link from "next/link";
+import { Check, Copy, RefreshCw, Share2 } from "lucide-react";
 
 import { GENRES, PUMP_FUN_COIN_URL } from "@/lib/constants";
 import { formatPct, formatUsd, hashHue, ticker } from "@/lib/format";
-import { publicPlayUrl, launchSlug } from "@/lib/site";
+import { launchSlug, playPath, publicPlayUrl } from "@/lib/site";
 import type { OcgLaunch } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -44,17 +45,16 @@ export function FilterChips({
 
 export function LaunchCard({
   launch,
-  onPlay,
   onRefresh,
 }: {
   launch: OcgLaunch;
-  onPlay: (launch: OcgLaunch) => void;
   onRefresh?: (launch: OcgLaunch) => void;
 }) {
   const hue = hashHue(launch.symbol + launch.name);
   const up = (launch.change24h ?? 0) >= 0;
   const [copied, setCopied] = useState<"share" | "ca" | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const href = playPath(launchSlug(launch));
 
   function shareUrl(): string {
     if (launch.mint) return `${PUMP_FUN_COIN_URL}/${launch.mint}`;
@@ -82,7 +82,8 @@ export function LaunchCard({
   }
 
   return (
-    <article className="group isolate relative min-h-[188px] overflow-hidden rounded-xl border border-border bg-card p-4 transition-colors duration-150 hover:border-[#2a4a4e] hover:bg-[#0e1b1e] sm:min-h-[232px] sm:p-5">
+    <article className="group isolate relative min-h-[188px] cursor-pointer overflow-hidden rounded-xl border border-border bg-card p-4 transition-colors duration-150 hover:border-[#2a4a4e] hover:bg-[#0e1b1e] sm:min-h-[232px] sm:p-5">
+      <Link href={href} className="absolute inset-0 z-10" aria-label={`Play ${launch.name}`} />
       <div className="pointer-events-none absolute -right-3 -bottom-6 size-32 rounded-full border border-border bg-card p-3 sm:-right-4 sm:-bottom-8 sm:size-44 sm:p-4">
         <div className="grid size-full place-items-center overflow-hidden rounded-full border border-white/6 bg-[#132225]">
           {launch.image ? (
@@ -100,7 +101,7 @@ export function LaunchCard({
 
       <div className="relative z-30 flex items-start justify-between gap-4">
         <div
-          className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-[#163034] text-sm font-semibold"
+          className="pointer-events-none flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-[#163034] text-sm font-semibold"
           style={launch.image ? undefined : { background: `hsl(${hue} 28% 16%)` }}
         >
           {launch.image ? (
@@ -111,14 +112,6 @@ export function LaunchCard({
           )}
         </div>
         <div className="flex shrink-0 flex-wrap items-start justify-end gap-1.5">
-          <button
-            type="button"
-            onClick={() => onPlay(launch)}
-            className="inline-flex h-[26px] items-center gap-1 rounded-full bg-primary px-2.5 text-[11px] font-semibold text-primary-foreground sm:hidden"
-          >
-            <Play className="size-3 fill-current" />
-            Play
-          </button>
           <IconButton
             label="Share"
             onClick={() => void copy("share", shareUrl())}
@@ -132,10 +125,12 @@ export function LaunchCard({
             type="button"
             title="Copy contract address"
             aria-label="Copy contract address"
-            onClick={() => {
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
               if (launch.mint) void copy("ca", launch.mint);
             }}
-            className="inline-flex h-[26px] shrink-0 cursor-pointer items-center gap-1 rounded-full border border-border bg-card/80 px-2 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase transition-colors hover:border-primary/60 hover:bg-[#132225] hover:text-foreground"
+            className="relative z-30 inline-flex h-[26px] shrink-0 cursor-pointer items-center gap-1 rounded-full border border-border bg-card/80 px-2 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase transition-colors hover:border-primary/60 hover:bg-[#132225] hover:text-foreground"
           >
             CA
             {copied === "ca" ? <Check className="size-3" /> : <Copy className="size-3" />}
@@ -143,7 +138,7 @@ export function LaunchCard({
         </div>
       </div>
 
-      <div className="relative z-10 mt-4 max-w-[74%] sm:mt-7 sm:max-w-[68%]">
+      <div className="pointer-events-none relative z-10 mt-4 max-w-[74%] sm:mt-7 sm:max-w-[68%]">
         <p className="truncate text-xs font-semibold text-primary">{ticker(launch.symbol)}</p>
         <p className="mt-1 truncate text-sm text-muted-foreground">{launch.name}</p>
         <p className="mt-1.5 text-[26px] font-semibold tracking-[-0.045em] sm:mt-2 sm:text-3xl">
@@ -165,21 +160,12 @@ export function LaunchCard({
         </div>
       </div>
 
-      <div className="relative z-10 mt-4 flex max-w-[78%] items-center gap-4 border-t border-border pt-3 text-[11px] text-muted-foreground sm:mt-5 sm:max-w-[72%]">
+      <div className="pointer-events-none relative z-10 mt-4 flex max-w-[78%] items-center gap-4 border-t border-border pt-3 text-[11px] text-muted-foreground sm:mt-5 sm:max-w-[72%]">
         <span>Vol {launch.volumeUsd ? formatUsd(launch.volumeUsd) : "—"}</span>
         {launch.change24h !== undefined ? (
           <span className={up ? "text-positive" : "text-negative"}>{formatPct(launch.change24h)}</span>
         ) : null}
       </div>
-
-      <button
-        type="button"
-        onClick={() => onPlay(launch)}
-        className="absolute top-1/2 left-1/2 z-20 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground shadow-lg transition-opacity sm:flex sm:pointer-events-none sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100 sm:group-focus-within:pointer-events-auto sm:group-focus-within:opacity-100"
-      >
-        <Play className="size-3.5 fill-current" />
-        Play
-      </button>
     </article>
   );
 }
@@ -198,8 +184,12 @@ function IconButton({
       type="button"
       aria-label={label}
       title={label}
-      onClick={onClick}
-      className="inline-grid size-[26px] shrink-0 place-items-center rounded-full border border-border bg-card/80 text-muted-foreground transition-colors hover:border-primary/60 hover:bg-[#132225] hover:text-foreground"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onClick();
+      }}
+      className="relative z-30 inline-grid size-[26px] shrink-0 place-items-center rounded-full border border-border bg-card/80 text-muted-foreground transition-colors hover:border-primary/60 hover:bg-[#132225] hover:text-foreground"
     >
       {children}
     </button>
