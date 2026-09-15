@@ -4,16 +4,14 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 
 import { GameFrame } from "@/components/game-frame";
-import { MAX_GAME_BYTES } from "@/lib/constants";
 import type { GenerateGameResponse } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 const LOADING_LINES = [
   "Writing the design…",
   "Building the world…",
   "Drawing the character…",
   "Tuning the loop…",
-  "Packing the ROM…",
+  "Packing the game…",
 ];
 
 export function RomCabinet({
@@ -26,9 +24,6 @@ export function RomCabinet({
   title: string;
 }) {
   const [line, setLine] = useState(0);
-  const compressed = game?.compressedBytes ?? 0;
-  const overLimit = compressed > MAX_GAME_BYTES;
-  const meter = game ? Math.min(100, Math.round((compressed / MAX_GAME_BYTES) * 100)) : 0;
 
   useEffect(() => {
     if (!generating) {
@@ -79,18 +74,17 @@ export function RomCabinet({
               </AnimatePresence>
               <div className="h-1 w-40 overflow-hidden rounded-full bg-white/10">
                 <motion.div
-                  className="h-full bg-cyan"
-                  animate={{ x: ["-100%", "100%"] }}
+                  className="h-full w-2/5 bg-cyan"
+                  animate={{ x: ["-100%", "250%"] }}
                   transition={{ repeat: Infinity, duration: 1.4, ease: "easeInOut" }}
-                  style={{ width: "40%" }}
                 />
               </div>
             </motion.div>
           ) : game ? (
             <motion.div
               key="play"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 overflow-hidden"
             >
@@ -106,28 +100,18 @@ export function RomCabinet({
               <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(0deg,transparent_0_2px,rgba(0,0,0,.18)_2px_3px)]" />
               <p className="font-mono text-sm tracking-[0.2em] text-cyan/70">INSERT PROMPT</p>
               <p className="max-w-xs text-xs text-muted-foreground">
-                Generate a ROM and it plays here — then launch the coin underneath.
+                Generate a game and it plays here — then launch the coin underneath.
               </p>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
       {game && !generating ? (
-        <div>
-          <div className="flex items-center justify-between gap-3 border-t border-white/5 px-3 py-2 text-xs">
-            <span className="truncate text-muted-foreground">
-              {game.bytes} raw · {game.compressedBytes} gzipped · {game.mechanic ?? game.genre}
-            </span>
-            <span className={overLimit ? "text-negative" : "text-positive"}>
-              {meter}% of {MAX_GAME_BYTES} gzip cap
-            </span>
-          </div>
-          <div className="h-1 bg-muted">
-            <div
-              className={cn("h-full", overLimit ? "bg-negative" : "bg-positive")}
-              style={{ width: `${meter}%` }}
-            />
-          </div>
+        <div className="flex items-center justify-between gap-3 border-t border-white/5 px-3 py-2 text-xs text-muted-foreground">
+          <span className="truncate">
+            {game.bytes} bytes · {game.mechanic ?? game.genre}
+          </span>
+          <span className="text-positive">Hosted play page</span>
         </div>
       ) : null}
     </motion.div>

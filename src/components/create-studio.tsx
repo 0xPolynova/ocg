@@ -1,6 +1,7 @@
 "use client";
 
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { Keypair } from "@solana/web3.js";
 import { AnimatePresence, motion } from "framer-motion";
 import { Info, Lock, Sparkles, Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -11,8 +12,6 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { WalletButton } from "@/components/wallet-ui";
 import { apiUrl } from "@/lib/api";
-import { inscribeGame } from "@/lib/chain-store";
-import { MAX_GAME_BYTES } from "@/lib/constants";
 import { utf8Bytes } from "@/lib/game-codec";
 import { upsertLaunch } from "@/lib/launches-store";
 import {
@@ -23,6 +22,7 @@ import {
   supplyPctForSol,
 } from "@/lib/pump-curve";
 import { createPumpToken, uploadPumpMetadata } from "@/lib/pump-launch";
+import { publicPlayUrl } from "@/lib/site";
 import type { GenerateGameResponse, OcgLaunch } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -51,8 +51,6 @@ export function CreateStudio() {
 
   const generating = busy === "generate";
   const showLaunch = Boolean(game) && !generating;
-  const compressed = game?.compressedBytes ?? 0;
-  const overLimit = compressed > MAX_GAME_BYTES;
   const pct = useMemo(() => supplyPctForSol(solBuy), [solBuy]);
   const sliderValue = buyMode === "sol" ? solBuy : pct;
   const sliderMax = buyMode === "sol" ? PUMP_MAX_SOL_BUY : PUMP_MAX_CURVE_PCT;
@@ -77,8 +75,7 @@ export function CreateStudio() {
       setName(json.name);
       setSymbol(json.symbol);
       setDescription(prompt.slice(0, 200));
-      if (!website && typeof window !== "undefined") setWebsite(window.location.origin);
-      setStatus(json.fallback ? json.error ?? "Used a compact fallback ROM." : "ROM ready. Play it, then launch.");
+      setStatus(json.fallback ? json.error ?? "Used a compact fallback ROM." : "Game ready. Play it, then launch.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Generation failed.";
       setError(
@@ -93,10 +90,6 @@ export function CreateStudio() {
 
   async function launch() {
     if (!game) return;
-    if (overLimit) {
-      setError("This ROM is too large to inscribe in a 4096-byte Solana V1 transaction.");
-      return;
-    }
     if (!wallet.publicKey) {
       setError("Connect a wallet to launch on Pump.fun.");
       return;
@@ -105,13 +98,22 @@ export function CreateStudio() {
     setBusy("launch");
     setError(null);
     try {
+      const mintKeypair = Keypair.generate();
+      const mint = mintKeypair.publicKey.toBase58();
+      const gameUrl = publicPlayUrl(mint);
+
       setStatus("Uploading token metadata…");
       const uri = await uploadPumpMetadata({
         name,
         symbol,
-        description: description || `OCG · ${prompt.slice(0, 160)}`,
+        description: [
+          description || `OCG · ${prompt.slice(0, 160)}`,
+          website.trim() ? `Project: ${website.trim()}` : "",
+        ]
+          .filter(Boolean)
+          .join(" — "),
         image,
-        website,
+        website: gameUrl,
         twitter,
         telegram,
       });
@@ -125,16 +127,10 @@ export function CreateStudio() {
         uri,
         solBuy,
         mayhemMode,
+        mintKeypair,
       });
 
-      setStatus("Inscribing game on Solana…");
-      const storeSignatures = await inscribeGame({
-        connection,
-        wallet,
-        mint: created.mint,
-        html: game.html,
-      });
-
+      setStatus("Saving game…");
       const record: OcgLaunch = {
         id: created.mint.toBase58(),
         name,
@@ -145,9 +141,10 @@ export function CreateStudio() {
         gameHtml: game.html,
         gameBytes: utf8Bytes(game.html),
         compressedBytes: game.compressedBytes,
-        mint: created.mint.toBase58(),
+        mint,
         creator: wallet.publicKey.toBase58(),
-        storeSignatures,
+        playUrl: gameUrl,
+        storeSignatures: [],
         createSignature: created.signature,
         createdAt: Date.now(),
         sparkline: [1, 2, 2, 3, 4, 4, 6, 7, 8, 9, 11, 13],
@@ -156,7 +153,7 @@ export function CreateStudio() {
         change24h: 0,
       };
       await upsertLaunch(record);
-      setStatus("Launched. Your game is live on Launches.");
+      setStatus("Launched. Play URL is in the token metadata.");
       router.push("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Launch failed.");
@@ -178,8 +175,8 @@ export function CreateStudio() {
         <div className="max-w-xl">
           <h1 className="text-3xl font-semibold tracking-tight">Create a game</h1>
           <p className="mt-2 text-muted-foreground">
-            Prompt a real micro-arcade. The ROM plays in the cabinet, then you launch the Pump.fun
-            coin underneath.
+            Prompt a real micro-arcade. It plays in the cabinet, then you launch the Pump.fun
+            coin with the play URL in the token metadata.
           </p>
         </div>
 
@@ -282,11 +279,11 @@ export function CreateStudio() {
                   </div>
 
                   <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                    <Field label="Website">
+                    <Field label="Project website">
                       <input
                         value={website}
                         onChange={(event) => setWebsite(event.target.value)}
-                        placeholder="https://"
+                        placeholder="optional"
                         className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary/50"
                       />
                     </Field>
@@ -308,7 +305,7 @@ export function CreateStudio() {
                     </Field>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Socials can only be set at creation on Pump.fun.
+                    Socials can only be set at creation. Pump.fun website is set to the OCG play page.
                   </p>
 
                   <label className="mt-5 flex items-start gap-3 rounded-xl border border-border bg-background/60 px-3 py-3">
@@ -374,8 +371,8 @@ export function CreateStudio() {
             <dl className="mt-4 space-y-3 text-sm">
               <Summary label="Engine" value="Qwen3 Coder" />
               <Summary label="Mechanic" value={game?.mechanic ?? "—"} />
-              <Summary label="Inscribe at" value={`${MAX_GAME_BYTES} gzip · V1 4096 tx`} />
-              <Summary label="ROM size" value={game ? `${game.compressedBytes} bytes` : "—"} />
+              <Summary label="Hosted at" value="launchocg.com/play/<mint>" />
+              <Summary label="Game size" value={game ? `${game.bytes} bytes` : "—"} />
               <Summary label="Ticker" value={symbol ? `$${symbol}` : "—"} />
               <Summary label="Supply" value="1B on Pump.fun curve" />
               <Summary
@@ -391,11 +388,11 @@ export function CreateStudio() {
             <div className="mt-5 space-y-2 rounded-xl bg-muted/50 p-3 text-xs text-muted-foreground">
               <p className="flex gap-2">
                 <Lock className="mt-0.5 size-3.5 shrink-0" />
-                Game bytes live in Solana transaction data so anyone can replay the ROM from the chain.
+                Game bytes live on OCG. Pump.fun metadata website is the play URL — Solscan cannot run HTML from a transaction.
               </p>
               <p className="flex gap-2">
                 <Sparkles className="mt-0.5 size-3.5 shrink-0" />
-                The token is a real Pump.fun coin. Metadata points back to the inscription signatures.
+                The token is a real Pump.fun coin. Anyone with the mint can open the game from the metadata link.
               </p>
               <p className="flex gap-2">
                 <Info className="mt-0.5 size-3.5 shrink-0" />
@@ -408,7 +405,7 @@ export function CreateStudio() {
                 <button
                   type="button"
                   onClick={() => void launch()}
-                  disabled={!showLaunch || overLimit || busy !== null || !name || !symbol}
+                  disabled={!showLaunch || busy !== null || !name || !symbol}
                   className="flex h-11 w-full items-center justify-center rounded-xl bg-primary font-medium text-primary-foreground disabled:opacity-50"
                 >
                   {busy === "launch" ? "Launching…" : "Launch game + token"}

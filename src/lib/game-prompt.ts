@@ -42,7 +42,7 @@ ${MECHANIC_RECIPES[plan.mechanic]}
 
 CODE SHAPE (required)
 <canvas id=c></canvas> then a script. 2d context lives in ctx. Never store ctx in x,y,w,h,p,s,t,e,n.
-VIEWPORT: the cabinet scales this canvas to fill a 16:10 box. Every frame read W=cv.width, H=cv.height (or innerWidth/innerHeight). NEVER hardcode 320/400/640. fillRect(0,0,W,H) the whole world. Positions and collisions must use W/H so the game fills the cabinet.
+VIEWPORT: the game plays in a 16:10 iframe. On boot and on resize set cv.width=innerWidth; cv.height=innerHeight. Every frame let W=innerWidth,H=innerHeight (or cv.width/cv.height). NEVER hardcode 320/400/640. fillRect(0,0,W,H) the whole world. Positions, cameras, and collisions must use W/H so the action fills the frame.
 let mode=0; // 0 title, 1 play, 2 over
 let score=0,best=0;
 function reset(){ /* rebuild world, score=0, mode=1 */ }
@@ -64,7 +64,7 @@ WHAT "FINISHED" MEANS (all required, not optional)
 6. Playable for 30+ seconds for a decent player. Include at least one interesting setpiece (a room, a pipe pair, a ghost, a brick row, a demon).
 
 BUDGET
-- Target ${TARGET_RAW_BYTES} characters of HTML. USE the budget. Under 4000 characters is an unfinished ROM — keep drawing.
+- Target ~${TARGET_RAW_BYTES} characters of HTML. USE the budget. Under 8000 characters is an unfinished game — keep drawing sprites, rooms, and juice.
 - No external URLs, images, fonts, or libraries. Inline CSS/JS only.
 - Palette: bg #041014, player #8fd4de, good #3ddc8e, bad #f07178, accent #f8d36a, text #e8fbff.
 

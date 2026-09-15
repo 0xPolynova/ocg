@@ -77,8 +77,8 @@ export function LaunchesView() {
         <div className="max-w-2xl">
           <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Launch games paired with SOL</h1>
           <p className="mt-2 text-muted-foreground">
-            Create and discover tiny on-chain games. Each launch inscribes the ROM on Solana and mints a
-            Pump.fun token.
+            Create and discover playable games. Each launch hosts the game on OCG and mints a
+            Pump.fun token whose metadata points at the play URL.
           </p>
         </div>
 

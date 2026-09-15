@@ -1,17 +1,10 @@
 export const APP_NAME = "OCG";
 export const APP_TAGLINE = "OnChainGame";
 export const APP_DESCRIPTION =
-  "Prompt a tiny playable game, inscribe it on Solana, and launch it as a Pump.fun token.";
+  "Prompt a playable game, host it on OCG, and launch a Pump.fun token whose metadata points at the play URL.";
 
-/**
- * Hard cap for gzipped game bytes stored in Solana instruction data.
- * Transaction V1 (SIMD-0385) is 4096 bytes on the wire; one noop inscription
- * leaves ~3914 bytes of instruction data, minus the OCG1 + mint header.
- */
-export const MAX_TX_BYTES_V1 = 4096;
-export const MAX_GAME_BYTES = 3800;
-/** Raw HTML budget. Gzip of dense JS is often ~2–3×, then we shrink if needed. */
-export const TARGET_RAW_BYTES = 12500;
+/** Soft target for generated HTML. Games are hosted, not stuffed into a transaction. */
+export const TARGET_RAW_BYTES = 40000;
 
 export const OPENROUTER_MODEL_DEFAULT = "qwen/qwen3-coder-next";
 /** HTML ROM coder — cheap coding model, stronger at JS than Gemini Flash. */

@@ -1,9 +1,7 @@
 import {
-  MAX_GAME_BYTES,
   OPENROUTER_CODE_MODEL_DEFAULT,
   OPENROUTER_FALLBACK_MODEL,
   OPENROUTER_MODEL_DEFAULT,
-  TARGET_RAW_BYTES,
 } from "./constants";
 import { compressGame, utf8Bytes } from "./game-codec";
 import {
@@ -24,7 +22,6 @@ import {
   implementUserPrompt,
   planSystemPrompt,
   polishPrompt,
-  shrinkPrompt,
   wrongGamePrompt,
 } from "./game-prompt";
 import { extractHtml } from "./minify-game";
@@ -33,7 +30,7 @@ import type { GenerateGameResponse } from "./types";
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
-const CODE_TOKENS = 8192;
+const CODE_TOKENS = 16000;
 
 async function chat(
   apiKey: string,
@@ -208,31 +205,14 @@ export async function generateGameFromPrompt(prompt: string): Promise<{
       usedModel = made.model;
     }
 
-    let compressed = compressGame(html).byteLength;
-    if (utf8Bytes(html) > TARGET_RAW_BYTES * 1.15 || compressed > MAX_GAME_BYTES) {
-      made = await writeRom(
-        [
-          { role: "system", content: implementSystemPrompt(plan, idea) },
-          { role: "assistant", content: html },
-          { role: "user", content: shrinkPrompt(plan, idea) },
-        ],
-        0.15,
-      );
-      html = made.html;
-      usedModel = made.model;
-      compressed = compressGame(html).byteLength;
-    }
-
-    if (compressed > MAX_GAME_BYTES || !/requestAnimationFrame/.test(html)) {
+    if (!/requestAnimationFrame/.test(html)) {
       const demo = fallbackGame(trimmed);
       const result = pack(
         demo.html,
         { ...plan, title: demo.name.toUpperCase() },
         usedModel,
         true,
-        compressed > MAX_GAME_BYTES
-          ? `Model game was ${compressed} gzipped bytes (limit ${MAX_GAME_BYTES}). Used a compact ${pickMechanic(trimmed)} fallback.`
-          : "Model game had no loop — used a compact fallback.",
+        "Model game had no loop — used a compact fallback.",
       );
       result.name = demo.name;
       result.symbol = demo.symbol;

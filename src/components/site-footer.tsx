@@ -18,7 +18,7 @@ export function SiteFooter() {
         <a href="https://pump.fun" className="hover:text-foreground" target="_blank" rel="noreferrer">
           Pump.fun
         </a>
-        <span className="ml-auto">Games inscribed on Solana · tokens on Pump.fun</span>
+        <span className="ml-auto">Games on OCG · tokens on Pump.fun</span>
       </div>
     </footer>
   );

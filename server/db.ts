@@ -1,6 +1,7 @@
 import { Pool } from "pg";
 
 import type { Genre } from "../src/lib/constants";
+import { publicPlayUrl } from "../src/lib/site";
 import type { OcgLaunch } from "../src/lib/types";
 
 type LaunchRow = {
@@ -62,6 +63,7 @@ function fromRow(row: LaunchRow): OcgLaunch {
     compressedBytes: Number(row.compressed_bytes),
     image: row.image ?? undefined,
     creator: row.creator ?? undefined,
+    playUrl: row.mint ? publicPlayUrl(row.mint) : undefined,
     storeSignatures: row.store_signatures ?? [],
     createSignature: row.create_signature ?? undefined,
     createdAt: Number(row.created_at),
@@ -220,6 +222,12 @@ export function parseLaunchBody(body: unknown): OcgLaunch | null {
     image: typeof value.image === "string" ? value.image : undefined,
     mint: typeof value.mint === "string" ? value.mint : undefined,
     creator: typeof value.creator === "string" ? value.creator : undefined,
+    playUrl:
+      typeof value.playUrl === "string"
+        ? value.playUrl
+        : typeof value.mint === "string"
+          ? publicPlayUrl(value.mint)
+          : undefined,
     storeSignatures: Array.isArray(value.storeSignatures)
       ? value.storeSignatures.filter((item): item is string => typeof item === "string")
       : [],

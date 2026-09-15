@@ -1,6 +1,6 @@
 import { gzip, inflate } from "pako";
 
-import { CHUNK_DATA_BYTES, MAX_GAME_BYTES, OCG_MAGIC } from "@/lib/constants";
+import { CHUNK_DATA_BYTES, OCG_MAGIC } from "@/lib/constants";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -61,10 +61,6 @@ export function joinChunks(chunks: Uint8Array[]): Uint8Array {
   return out;
 }
 
-export function assertFitsOnChain(compressedBytes: number): void {
-  if (compressedBytes > MAX_GAME_BYTES) {
-    throw new Error(
-      `Game is ${compressedBytes} gzipped bytes. On-chain V1 limit is ${MAX_GAME_BYTES} gzipped bytes (4096-byte transaction).`,
-    );
-  }
+export function assertFitsOnChain(_compressedBytes: number): void {
+  // Games are hosted on OCG; transaction size is no longer a launch cap.
 }

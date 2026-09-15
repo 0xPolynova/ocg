@@ -50,13 +50,14 @@ export async function createPumpToken(args: {
   uri: string;
   solBuy: number;
   mayhemMode?: boolean;
+  mintKeypair?: Keypair;
 }): Promise<{ mint: PublicKey; mintKeypair: Keypair; signature: string }> {
   if (!args.wallet.publicKey) throw new Error("Connect a wallet first.");
 
   const [{ OnlinePumpSdk, PUMP_SDK, getBuyTokenAmountFromSolAmount }, { ComputeBudgetProgram }] =
     await Promise.all([import("@pump-fun/pump-sdk"), import("@solana/web3.js")]);
 
-  const mintKeypair = Keypair.generate();
+  const mintKeypair = args.mintKeypair ?? Keypair.generate();
   const user = args.wallet.publicKey;
   const sdk = new OnlinePumpSdk(args.connection);
   const global = await sdk.fetchGlobal();

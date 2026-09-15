@@ -39,9 +39,9 @@ export default function PlayPage() {
   return (
     <div className="flex min-h-full flex-col">
       <SiteHeader />
-      <main className="flex flex-1 items-center justify-center p-6">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 md:px-6">
         {launch ? (
-          <PlayModal launch={launch} onClose={() => history.back()} />
+          <PlayModal launch={launch} variant="page" />
         ) : (
           <p className="text-muted-foreground">Game not found.</p>
         )}
