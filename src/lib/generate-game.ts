@@ -1,6 +1,7 @@
 import {
   MAX_GAME_BYTES,
   OPENROUTER_CODE_MODEL_DEFAULT,
+  OPENROUTER_FALLBACK_MODEL,
   OPENROUTER_MODEL_DEFAULT,
   TARGET_RAW_BYTES,
 } from "./constants";
@@ -168,7 +169,7 @@ export async function generateGameFromPrompt(prompt: string): Promise<{
       const planned = await withModelFallback(
         apiKey,
         planModel,
-        OPENROUTER_MODEL_DEFAULT,
+        OPENROUTER_FALLBACK_MODEL,
         [
           { role: "system", content: PLAN_PROMPT },
           {
@@ -189,7 +190,7 @@ export async function generateGameFromPrompt(prompt: string): Promise<{
       const made = await withModelFallback(
         apiKey,
         codeModel,
-        planModel,
+        OPENROUTER_FALLBACK_MODEL,
         [
           { role: "system", content: implementPrompt(plan, idea) + extra },
           {
@@ -222,7 +223,7 @@ export async function generateGameFromPrompt(prompt: string): Promise<{
       const shrunk = await withModelFallback(
         apiKey,
         codeModel,
-        planModel,
+        OPENROUTER_FALLBACK_MODEL,
         [
           { role: "system", content: implementPrompt(plan, idea) },
           { role: "assistant", content: html },

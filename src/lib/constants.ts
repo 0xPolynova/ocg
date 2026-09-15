@@ -8,9 +8,10 @@ export const MAX_GAME_BYTES = 3000;
 /** Raw HTML budget. Gzip of tight JS is ~2.5–3×, so this still fits on-chain. */
 export const TARGET_RAW_BYTES = 7800;
 
-export const OPENROUTER_MODEL_DEFAULT = "google/gemini-2.5-flash";
-/** Stronger coder for the HTML pass. Falls back to flash if the key can't call it. */
-export const OPENROUTER_CODE_MODEL_DEFAULT = "google/gemini-2.5-pro";
+export const OPENROUTER_MODEL_DEFAULT = "qwen/qwen3-coder-next";
+/** HTML ROM coder — cheap coding model, stronger at JS than Gemini Flash. */
+export const OPENROUTER_CODE_MODEL_DEFAULT = "qwen/qwen3-coder";
+export const OPENROUTER_FALLBACK_MODEL = "google/gemini-2.5-flash";
 
 export const PUMP_FUN_COIN_URL = "https://pump.fun/coin";
 

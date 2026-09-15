@@ -372,7 +372,7 @@ export function CreateStudio() {
           <aside className="rounded-2xl border border-border bg-card p-5 lg:sticky lg:top-24">
             <h2 className="text-sm font-medium">Launch summary</h2>
             <dl className="mt-4 space-y-3 text-sm">
-              <Summary label="Engine" value="Plan → Gemini Pro" />
+              <Summary label="Engine" value="Qwen3 Coder" />
               <Summary label="Mechanic" value={game?.mechanic ?? "—"} />
               <Summary label="Inscribe at" value={`${MAX_GAME_BYTES} byte cap`} />
               <Summary label="ROM size" value={game ? `${game.compressedBytes} bytes` : "—"} />
