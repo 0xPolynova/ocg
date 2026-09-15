@@ -22,7 +22,7 @@ npm run dev
 ## Custom domain
 
 Production host: **https://launchocg.com**
-API: **https://api.launchocg.com**
+API: **https://ocg-api.onrender.com**
 
 DNS at your registrar:
 
@@ -40,6 +40,6 @@ Remove any `AAAA` records.
 1. Push this repo to GitHub.
 2. In Render, **New → Blueprint** and select the repo (`render.yaml`).
 3. Set API env vars: `OPENROUTER_API_KEY`, `SOLANA_RPC` (Helius or similar).
-4. After DNS is live, rebuild **ocg-web** so `NEXT_PUBLIC_API_URL=https://api.launchocg.com` is baked in.
+4. Rebuild **ocg-web** so it talks to `https://ocg-api.onrender.com`.
 
 Wallet signing stays in the browser. Game generation, RPC, and IPFS uploads go through `ocg-api`.

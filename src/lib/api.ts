@@ -1,11 +1,23 @@
 const DEV_API = "http://localhost:4000";
-const PROD_API = "https://api.launchocg.com";
+const PROD_API = "https://ocg-api.onrender.com";
+const DEAD_API_HOSTS = ["api.launchocg.com"];
+
+function resolveApiOrigin(fromEnv: string | undefined, fallback: string): string {
+  const value = fromEnv?.replace(/\/$/, "");
+  if (!value) return fallback;
+  try {
+    if (DEAD_API_HOSTS.includes(new URL(value).hostname)) return fallback;
+  } catch {
+    return fallback;
+  }
+  return value;
+}
 
 export function publicApiOrigin(): string {
-  const fromEnv = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
-  if (fromEnv) return fromEnv;
-  if (process.env.NODE_ENV === "development") return DEV_API;
-  return PROD_API;
+  if (process.env.NODE_ENV === "development") {
+    return resolveApiOrigin(process.env.NEXT_PUBLIC_API_URL, DEV_API);
+  }
+  return resolveApiOrigin(process.env.NEXT_PUBLIC_API_URL, PROD_API);
 }
 
 export function apiUrl(path: string): string {
@@ -14,10 +26,10 @@ export function apiUrl(path: string): string {
 }
 
 export function backendOrigin(): string {
-  const fromEnv = process.env.API_URL?.replace(/\/$/, "");
-  if (fromEnv) return fromEnv;
-  if (process.env.NODE_ENV === "development") return DEV_API;
-  return PROD_API;
+  if (process.env.NODE_ENV === "development") {
+    return resolveApiOrigin(process.env.API_URL, DEV_API);
+  }
+  return resolveApiOrigin(process.env.API_URL, PROD_API);
 }
 
 export async function readJson<T>(response: Response): Promise<T> {

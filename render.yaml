@@ -41,3 +41,5 @@ services:
         value: "24"
       - key: API_URL
         value: https://ocg-api.onrender.com
+      - key: NEXT_PUBLIC_API_URL
+        value: https://ocg-api.onrender.com

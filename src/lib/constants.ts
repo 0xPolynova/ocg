@@ -18,15 +18,11 @@ export const OPENROUTER_FALLBACK_MODELS = [
 export const PUMP_FUN_COIN_URL = "https://pump.fun/coin";
 export const SOLSCAN_TOKEN_URL = "https://solscan.io/token";
 export const SOLSCAN_TX_URL = "https://solscan.io/tx";
-export const OCG_X_URL = "https://x.com/launchOCG";
 
 export function solscanTokenUrl(mint: string): string {
   return `${SOLSCAN_TOKEN_URL}/${mint}#metadata`;
 }
-
-export function solscanTxUrl(signature: string): string {
-  return `${SOLSCAN_TX_URL}/${signature}`;
-}
+export const OCG_X_URL = "https://x.com/launchOCG";
 
 /** SPL Account Compression noop — accepts arbitrary instruction data. */
 export const NOOP_PROGRAM_ID = "noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV";
