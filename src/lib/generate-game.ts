@@ -14,7 +14,9 @@ Rules:
 - No markdown, no explanation, no fences
 - No external URLs, fonts, images, libraries, or network calls
 - Inline CSS and JS only
-- One <canvas> that fills the viewport
+- One <canvas id=c>, then const ctx=c.getContext('2d')
+- NEVER store the context in x, y, w, h, p, s, t, e, or n. Those are numbers/events.
+- Player position MUST be px/py (or paddle). Draw ONLY with ctx.beginPath/ctx.arc/ctx.fillRect/ctx.fillText
 - Playable immediately with pointer and/or keyboard
 - Show a score and restart on click
 - Dark teal arcade look (#041014 background, #8fd4de player, #3ddc8e score, #f07178 hazards)
