@@ -17,12 +17,13 @@ import { utf8Bytes } from "@/lib/game-codec";
 import { upsertLaunch, fetchLaunch } from "@/lib/launches-store";
 import {
   formatTokenAmount,
+  pumpLaunchBudget,
   PUMP_MAX_CURVE_PCT,
   PUMP_MAX_SOL_BUY,
   solForSupplyPct,
   supplyPctForSol,
 } from "@/lib/pump-curve";
-import { createPumpToken, uploadPumpMetadata } from "@/lib/pump-launch";
+import { createPumpToken, uploadPumpMetadata, assertWalletCanPayForPump } from "@/lib/pump-launch";
 import { allocatePlaySlug, playPath, publicPlayUrl, tickerSlug } from "@/lib/site";
 import {
   draftTabLabel,
@@ -227,6 +228,9 @@ export function CreateStudio() {
     setBusyById((current) => ({ ...current, [draftId]: "launch" }));
     setError(null);
     try {
+      setStatus("Checking wallet…");
+      await assertWalletCanPayForPump(wallet.publicKey, active.solBuy);
+
       const mintKeypair = Keypair.generate();
       const mint = mintKeypair.publicKey.toBase58();
       const slug = await allocatePlaySlug(active.symbol, mint, fetchLaunch);
@@ -682,6 +686,11 @@ export function CreateStudio() {
                       <p className="mt-1 text-[11px] text-muted-foreground">
                         {active.solBuy.toFixed(3)} SOL · {pct.toFixed(2)}% of 1B
                         {active.solBuy > 0 ? ` · ~${formatTokenAmount(active.solBuy)} tokens` : ""}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {active.solBuy > 0
+                          ? `First buy needs about ${pumpLaunchBudget(active.solBuy).totalSol.toFixed(3)} SOL in the wallet (${active.solBuy.toFixed(3)} buy + ${pumpLaunchBudget(active.solBuy).overheadSol.toFixed(3)} create rent). Create with 0 buy is ~0.04 SOL.`
+                          : "Create with no buy needs about 0.04 SOL for rent and fees."}
                       </p>
                     </div>
                     </motion.div>

@@ -9,6 +9,7 @@ import {
   simulatePumpTxVerbose,
   type PumpSimReport,
 } from "@/lib/pump-create-tx";
+import { describePumpFundsError, maxPumpBuySol, pumpLaunchBudget } from "@/lib/pump-curve";
 import { HELIUS_RPC_HTTP } from "@/lib/solana-rpc";
 import type { PumpCoinStats } from "@/lib/types";
 
@@ -76,6 +77,23 @@ async function signMainnetVersionedTx(args: {
   return args.signTransaction(args.transaction);
 }
 
+export async function assertWalletCanPayForPump(payer: PublicKey, solBuy: number): Promise<void> {
+  const connection = new Connection(HELIUS_RPC_HTTP, { commitment: "confirmed" });
+  const balance = await connection.getBalance(payer, "confirmed");
+  const budget = pumpLaunchBudget(solBuy);
+  const haveSol = balance / 1_000_000_000;
+  if (haveSol + 1e-9 >= budget.totalSol) return;
+  const maxBuy = maxPumpBuySol(balance);
+  if (budget.buySol > 0 && maxBuy <= 0) {
+    throw new Error(
+      `Wallet has ${haveSol.toFixed(3)} SOL. Creating the token needs about ${budget.overheadSol.toFixed(3)} SOL for rent and fees before any buy. Add SOL or set the dev buy to 0.`,
+    );
+  }
+  throw new Error(
+    `Wallet has ${haveSol.toFixed(3)} SOL on-chain. A ${budget.buySol.toFixed(3)} SOL first buy plus create rent needs about ${budget.totalSol.toFixed(3)} SOL. Lower the dev buy to ${maxBuy.toFixed(3)} SOL or less.`,
+  );
+}
+
 async function waitForSignature(connection: Connection, signature: string, lastValidBlockHeight: number): Promise<void> {
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
@@ -132,6 +150,7 @@ export async function createPumpToken(args: {
   mintSecretKey: Uint8Array;
 }): Promise<{ mint: PublicKey; signature: string }> {
   if (!args.wallet.publicKey) throw new Error("Connect a wallet first.");
+  await assertWalletCanPayForPump(args.wallet.publicKey, args.solBuy);
 
   const response = await fetch(apiUrl("/api/pump/create-tx"), {
     method: "POST",
@@ -184,8 +203,11 @@ export async function createPumpToken(args: {
     sizeWithoutAlt: json.simulation?.sizeWithoutAlt ?? null,
   });
   if (!clientSim.ok) {
+    const logs = clientSim.logs.slice(-20).join("\n") || JSON.stringify(clientSim.err);
+    const walletLamports = await connection.getBalance(args.wallet.publicKey, "confirmed");
     throw new Error(
-      `Pump create simulation failed before signing: ${clientSim.logs.slice(-20).join("\n") || JSON.stringify(clientSim.err)}`,
+      describePumpFundsError(logs, walletLamports / 1_000_000_000) ??
+        `Pump create simulation failed before signing: ${logs}`,
     );
   }
 

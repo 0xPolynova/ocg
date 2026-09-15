@@ -7,6 +7,7 @@ import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 
 import { generateGameFromChat } from "../src/lib/generate-game";
 import { buildMintSignedPumpCreateTx } from "../src/lib/pump-create-tx";
+import { maxPumpBuySol, pumpLaunchBudget } from "../src/lib/pump-curve";
 import { HELIUS_RPC_HTTP } from "../src/lib/solana-rpc";
 import { checkGenerateLimit, clientIp } from "./chat-limit";
 import { ensureLaunchSchema, getLaunch, listLaunches, parseLaunchBody, upsertLaunchRecord } from "./db";
@@ -204,10 +205,25 @@ app.post("/api/pump/create-tx", async (req, res) => {
     }
 
     const connection = new Connection(SOLANA_RPC, { commitment: "confirmed" });
+    const userKey = new PublicKey(user);
+    const balance = await connection.getBalance(userKey, "confirmed");
+    const budget = pumpLaunchBudget(solBuy);
+    if (balance / 1_000_000_000 + 1e-9 < budget.totalSol) {
+      const haveSol = balance / 1_000_000_000;
+      const maxBuy = maxPumpBuySol(balance);
+      res.status(400).json({
+        error:
+          budget.buySol > 0 && maxBuy <= 0
+            ? `Wallet has ${haveSol.toFixed(3)} SOL. Creating the token needs about ${budget.overheadSol.toFixed(3)} SOL for rent and fees before any buy. Add SOL or set the dev buy to 0.`
+            : `Wallet has ${haveSol.toFixed(3)} SOL on-chain. A ${budget.buySol.toFixed(3)} SOL first buy plus create rent needs about ${budget.totalSol.toFixed(3)} SOL. Lower the dev buy to ${maxBuy.toFixed(3)} SOL or less.`,
+      });
+      return;
+    }
+
     const mintKeypair = Keypair.fromSecretKey(mintSecret);
     const built = await buildMintSignedPumpCreateTx({
       connection,
-      user: new PublicKey(user),
+      user: userKey,
       mintKeypair,
       name,
       symbol,

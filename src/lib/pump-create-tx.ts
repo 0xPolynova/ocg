@@ -11,6 +11,8 @@ import {
 } from "@solana/web3.js";
 import { NATIVE_MINT } from "@solana/spl-token";
 
+import { describePumpFundsError } from "./pump-curve";
+
 export const PUMP_PROGRAM_ID = new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P");
 export const PUMP_ALT_MAINNET = new PublicKey("7mFD2mUtRS65XstiSAvCJuYmdesZoQwCwRJhq1p3eRMe");
 const COMPUTE_BUDGET_PROGRAM = new PublicKey("ComputeBudget111111111111111111111111111111");
@@ -281,7 +283,10 @@ export async function buildMintSignedPumpCreateTx(args: {
   });
   if (!simulation.ok) {
     const logs = simulation.logs.slice(-20).join("\n") || JSON.stringify(simulation.err);
-    throw new Error(`Pump create simulation failed: ${logs}`);
+    const walletLamports = await args.connection.getBalance(args.user, "confirmed");
+    throw new Error(
+      describePumpFundsError(logs, walletLamports / 1_000_000_000) ?? `Pump create simulation failed: ${logs}`,
+    );
   }
 
   // Phantom: multi-signer txs must reach the wallet UNSIGNED. We sign mint after Phantom.
