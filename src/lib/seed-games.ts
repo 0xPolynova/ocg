@@ -1,5 +1,6 @@
 import type { OcgLaunch } from "@/lib/types";
 import { compressGame, utf8Bytes } from "@/lib/game-codec";
+import { pickMechanic } from "@/lib/game-plan";
 
 const PONG = `<!doctype html><meta charset=utf-8><body style="margin:0;background:#041014;overflow:hidden"><canvas id=c></canvas><script>
 ctx=c.getContext('2d');W=c.width=innerWidth;H=c.height=innerHeight;p=H/2-40;tx=p;b={x:W/2,y:H/2,vx:4,vy:3};s=0;best=0;st=0;g=1;tr=[]
@@ -49,6 +50,67 @@ else if(g){if(t%Math.max(10,22-(s/8|0))==0)d.push({x:36+Math.random()*(W-72),y:-
 else{basket(px);ctx.fillStyle='#e8fbff';ctx.font='bold 26px monospace';ctx.fillText('SPILL  '+s,24,56);ctx.font='14px monospace';ctx.fillText('best '+best+'  click',24,82)}
 requestAnimationFrame(L)}
 onclick=()=>{if(!st){st=1;beep(660,.08);return}if(!g){g=1;s=0;d=[];t=0;beep(520,.06)}}
+L()
+</script>`;
+
+const SNAKE = `<!doctype html><meta charset=utf-8><body style="margin:0;background:#041014;overflow:hidden"><canvas id=c></canvas><script>
+ctx=c.getContext('2d');W=c.width=innerWidth;H=c.height=innerHeight;K=16;cols=W/K|0;rows=H/K|0;sn=[{x:5,y:6},{x:4,y:6}];d={x:1,y:0};fd={x:12,y:8};s=0;best=0;t=0;st=0;g=1
+onkeydown=e=>{k=e.key;if((k==='ArrowLeft'||k==='a')&&d.x!==1)d={x:-1,y:0};if((k==='ArrowRight'||k==='d')&&d.x!==-1)d={x:1,y:0};if((k==='ArrowUp'||k==='w')&&d.y!==1)d={x:0,y:-1};if((k==='ArrowDown'||k==='s')&&d.y!==-1)d={x:0,y:1}}
+function food(){fd={x:1+Math.random()*(cols-2)|0,y:1+Math.random()*(rows-2)|0}}
+function L(){t++;ctx.fillStyle='#041014';ctx.fillRect(0,0,W,H);ctx.fillStyle='#163033';for(i=0;i<36;i++)ctx.fillRect((i*83)%W,(i*47)%H,2,2)
+if(!st){ctx.fillStyle='#e8fbff';ctx.font='bold 26px monospace';ctx.fillText('NEON SNAKE',24,56);ctx.font='14px monospace';ctx.fillText('arrows eat bits — click',24,82)}
+else if(g){if(t%Math.max(4,11-(s/5|0))==0){h={x:sn[0].x+d.x,y:sn[0].y+d.y};if(h.x<0||h.y<0||h.x>=cols||h.y>=rows||sn.some(p=>p.x===h.x&&p.y===h.y)){g=0;best=Math.max(best,s);burst(h.x*K,h.y*K,'#8fd4de',18);shake(10);beep(90,.2)}else{sn.unshift(h);if(h.x===fd.x&&h.y===fd.y){s++;food();burst(fd.x*K,fd.y*K,'#f8d36a',12);beep(880,.05)}else sn.pop()}}
+ctx.fillStyle='#f8d36a';ctx.beginPath();ctx.arc(fd.x*K+8,fd.y*K+8,6,0,7);ctx.fill();sn.forEach((p,i)=>{ctx.fillStyle=i?'#8fd4de':'#e8fbff';ctx.shadowBlur=i?0:12;ctx.shadowColor='#8fd4de';ctx.fillRect(p.x*K+1,p.y*K+1,K-2,K-2);ctx.shadowBlur=0});ctx.fillStyle='#3ddc8e';ctx.font='bold 18px monospace';ctx.fillText(s+'  best '+best,16,28)}
+else{ctx.fillStyle='#e8fbff';ctx.font='bold 26px monospace';ctx.fillText('BITTEN  '+s,24,56);ctx.font='14px monospace';ctx.fillText('best '+best+'  click',24,82)}
+requestAnimationFrame(L)}
+onclick=()=>{if(!st){st=1;beep(660,.08);return}if(!g){g=1;s=0;sn=[{x:5,y:6},{x:4,y:6}];d={x:1,y:0};food();beep(520,.06)}}
+L()
+</script>`;
+
+const FLAPPY = `<!doctype html><meta charset=utf-8><body style="margin:0;background:#041014;overflow:hidden"><canvas id=c></canvas><script>
+ctx=c.getContext('2d');W=c.width=innerWidth;H=c.height=innerHeight;px=W*.28;py=H/2;vy=0;s=0;best=0;st=0;g=1;pipes=[];t=0
+function flap(){if(g){vy=-7.2;beep(620,.04)}}
+onkeydown=e=>{if(e.key===' '||e.key==='ArrowUp')flap()}
+function bird(x,y){ctx.shadowBlur=12;ctx.shadowColor='#8fd4de';ctx.fillStyle='#8fd4de';ctx.beginPath();ctx.ellipse(x,y,14,10,0,0,7);ctx.fill();ctx.beginPath();ctx.moveTo(x-4,y);ctx.lineTo(x-18,y-8);ctx.lineTo(x-10,y+2);ctx.fill();ctx.shadowBlur=0;ctx.fillStyle='#f8d36a';ctx.beginPath();ctx.moveTo(x+12,y-2);ctx.lineTo(x+22,y);ctx.lineTo(x+12,y+2);ctx.fill();ctx.fillStyle='#041014';ctx.beginPath();ctx.arc(x+4,y-3,2,0,7);ctx.fill()}
+function L(){t++;ctx.fillStyle='#041014';ctx.fillRect(0,0,W,H);ctx.fillStyle='#163033';for(i=0;i<40;i++)ctx.fillRect((i*97+t)%W,(i*53)%H,2,2)
+if(!st){bird(W/2,H/2);ctx.fillStyle='#e8fbff';ctx.font='bold 26px monospace';ctx.fillText('PIPE BIRD',24,56);ctx.font='14px monospace';ctx.fillText('click / space to flap',24,82)}
+else if(g){vy+=.38;py+=vy;if(t%90==0)pipes.push({x:W+20,gap:80+Math.random()*(H-220),h:90+Math.random()*40});for(const p of pipes){p.x-=3.2+s*.02;ctx.fillStyle='#3ddc8e';ctx.fillRect(p.x,0,36,p.gap);ctx.fillRect(p.x,p.gap+p.h,36,H);if(p.x+36<px&&!p.got){p.got=1;s++;beep(880,.05);burst(px,py,'#f8d36a',8)}if(px>p.x&&px<p.x+36&&(py<p.gap||py>p.gap+p.h)){g=0;best=Math.max(best,s);shake(12);burst(px,py,'#8fd4de',20);beep(90,.2)}}if(py<12||py>H-12){g=0;best=Math.max(best,s);shake(12);beep(90,.2)}bird(px,py);ctx.fillStyle='#3ddc8e';ctx.font='bold 18px monospace';ctx.fillText(s+'  best '+best,16,28)}
+else{bird(px,py);ctx.fillStyle='#e8fbff';ctx.font='bold 26px monospace';ctx.fillText('SPLAT  '+s,24,56);ctx.font='14px monospace';ctx.fillText('best '+best+'  click',24,82)}
+requestAnimationFrame(L)}
+onclick=()=>{if(!st){st=1;beep(660,.08);return}if(!g){g=1;s=0;py=H/2;vy=0;pipes=[];t=0;beep(520,.06);return}flap()}
+L()
+</script>`;
+
+const SHIP = `<!doctype html><meta charset=utf-8><body style="margin:0;background:#041014;overflow:hidden"><canvas id=c></canvas><script>
+ctx=c.getContext('2d');W=c.width=innerWidth;H=c.height=innerHeight;px=W/2;tx=px;s=0;best=0;t=0;st=0;g=1;bl=[];ast=[]
+onmousemove=e=>tx=e.clientX
+ontouchmove=e=>{tx=e.touches[0].clientX;e.preventDefault()}
+onkeydown=e=>{if(e.key===' '||e.key==='ArrowUp')fire()}
+function fire(){if(!g||!st)return;bl.push({x:px,y:H-50});beep(740,.03)}
+function craft(x,y){ctx.shadowBlur=14;ctx.shadowColor='#8fd4de';ctx.fillStyle='#8fd4de';ctx.beginPath();ctx.moveTo(x,y-16);ctx.lineTo(x-14,y+14);ctx.lineTo(x,y+6);ctx.lineTo(x+14,y+14);ctx.fill();ctx.shadowBlur=0}
+function L(){t++;px+=(tx-px)*.2;ctx.fillStyle='#041014';ctx.fillRect(0,0,W,H);ctx.fillStyle='#163033';for(i=0;i<50;i++)ctx.fillRect((i*97+t)%W,(i*53)%H,2,2)
+if(!st){craft(W/2,H/2);ctx.fillStyle='#e8fbff';ctx.font='bold 26px monospace';ctx.fillText('BIT SHIP',24,56);ctx.font='14px monospace';ctx.fillText('move + click to fire',24,82)}
+else if(g){if(t%28==0)ast.push({x:20+Math.random()*(W-40),y:-16,v:1.6+Math.random()*2+s/80,r:10+Math.random()*12});if(t%8==0)fire();
+craft(px,H-36);bl.forEach(b=>{b.y-=9;ctx.fillStyle='#f8d36a';ctx.fillRect(b.x-2,b.y,4,10)});ast.forEach(a=>{a.y+=a.v;ctx.fillStyle='#f07178';ctx.beginPath();ctx.moveTo(a.x,a.y-a.r);ctx.lineTo(a.x+a.r,a.y);ctx.lineTo(a.x,a.y+a.r);ctx.lineTo(a.x-a.r,a.y);ctx.fill();if(Math.hypot(a.x-px,a.y-(H-36))<18+a.r*.5){g=0;best=Math.max(best,s);burst(px,H-36,'#8fd4de',22);shake(12);beep(90,.2)}});
+for(const a of ast){for(const b of bl){if(Math.hypot(a.x-b.x,a.y-b.y)<a.r){s++;a.y=9e9;b.y=-9e9;burst(a.x,a.y,'#f8d36a',10);beep(920,.04)}}}bl=bl.filter(b=>b.y>-10);ast=ast.filter(a=>a.y<H+20);
+ctx.fillStyle='#3ddc8e';ctx.font='bold 18px monospace';ctx.fillText(s+'  best '+best,16,28)}
+else{craft(px,H-36);ctx.fillStyle='#e8fbff';ctx.font='bold 26px monospace';ctx.fillText('WRECKED  '+s,24,56);ctx.font='14px monospace';ctx.fillText('best '+best+'  click',24,82)}
+requestAnimationFrame(L)}
+onclick=()=>{if(!st){st=1;beep(660,.08);return}if(!g){g=1;s=0;bl=[];ast=[];t=0;beep(520,.06);return}fire()}
+L()
+</script>`;
+
+const FROG = `<!doctype html><meta charset=utf-8><body style="margin:0;background:#041014;overflow:hidden"><canvas id=c></canvas><script>
+ctx=c.getContext('2d');W=c.width=innerWidth;H=c.height=innerHeight;row=0;px=W/2;s=0;best=0;st=0;g=1;t=0;lanes=[{v:2,w:70,c:'#8fd4de'},{v:-2.4,w:90,c:'#3ddc8e'},{v:1.7,w:60,c:'#8fd4de'},{v:-3,w:80,c:'#3ddc8e'}];logs=lanes.map((ln,i)=>[{x:(i*90)%W,y:H-90-i*70,w:ln.w,v:ln.v,c:ln.c},{x:(i*90+220)%W,y:H-90-i*70,w:ln.w,v:ln.v,c:ln.c}])
+onkeydown=e=>{if(!g||!st)return;if(e.key==='ArrowUp'||e.key==='w')hop()}
+function hop(){row++;px+=0;beep(700,.04);if(row>=lanes.length){s++;row=0;px=W/2;burst(px,80,'#f8d36a',12);beep(980,.06);if(s%3==0)lanes.forEach(l=>l.v*=1.08)}}
+function frog(x,y){ctx.shadowBlur=12;ctx.shadowColor='#3ddc8e';ctx.fillStyle='#3ddc8e';ctx.beginPath();ctx.arc(x,y,12,0,7);ctx.fill();ctx.beginPath();ctx.arc(x-10,y+8,5,0,7);ctx.arc(x+10,y+8,5,0,7);ctx.fill();ctx.shadowBlur=0;ctx.fillStyle='#041014';ctx.beginPath();ctx.arc(x-4,y-3,2,0,7);ctx.arc(x+4,y-3,2,0,7);ctx.fill()}
+function L(){t++;ctx.fillStyle='#041014';ctx.fillRect(0,0,W,H);ctx.fillStyle='#0a2a32';ctx.fillRect(0,H-40,W,40);ctx.fillRect(0,0,W,50)
+if(!st){frog(W/2,H/2);ctx.fillStyle='#e8fbff';ctx.font='bold 26px monospace';ctx.fillText('CANAL FROG',24,56);ctx.font='14px monospace';ctx.fillText('up / click hops logs',24,82)}
+else if(g){let ride=row===0;const fy=H-28-row*70;logs.forEach((ln,i)=>ln.forEach(o=>{o.x+=o.v;if(o.x>W)o.x=-o.w;if(o.x+o.w<0)o.x=W;ctx.fillStyle=o.c;ctx.fillRect(o.x,o.y,o.w,22);if(i===row-1&&px>o.x-8&&px<o.x+o.w+8){ride=1;px+=o.v}}));if(row>0&&!ride){g=0;best=Math.max(best,s);burst(px,fy,'#f07178',16);shake(10);beep(90,.2)}if(px<8||px>W-8){g=0;best=Math.max(best,s);beep(90,.2)}frog(px,fy);ctx.fillStyle='#3ddc8e';ctx.font='bold 18px monospace';ctx.fillText(s+'  best '+best,16,28)}
+else{ctx.fillStyle='#e8fbff';ctx.font='bold 26px monospace';ctx.fillText('SPLASH  '+s,24,56);ctx.font='14px monospace';ctx.fillText('best '+best+'  click',24,82)}
+requestAnimationFrame(L)}
+onclick=()=>{if(!st){st=1;beep(660,.08);return}if(!g){g=1;s=0;row=0;px=W/2;beep(520,.06);return}hop()}
 L()
 </script>`;
 
@@ -113,15 +175,70 @@ export const SEED_LAUNCHES: OcgLaunch[] = [
     change24h: 1.9,
     sparkline: [16, 17, 16, 18, 19, 18, 20, 22, 21, 23, 24, 25],
   }),
+  launch({
+    id: "seed-snek",
+    name: "Neon Snake",
+    symbol: "SNEK",
+    description: "Eat bits. Don't bite yourself.",
+    prompt: "neon snake eat bits don't hit the tail",
+    genre: "Arcade",
+    gameHtml: SNAKE,
+    demo: true,
+    createdAt: Date.UTC(2026, 8, 10),
+    marketCapUsd: 7_440_000,
+    volumeUsd: 410_000,
+    change24h: 8.4,
+    sparkline: [10, 12, 11, 14, 16, 15, 18, 21, 20, 24, 26, 29],
+  }),
+  launch({
+    id: "seed-ship",
+    name: "Bit Ship",
+    symbol: "SHIP",
+    description: "Blast the rocks. Don't get clipped.",
+    prompt: "tiny spaceship blasting incoming asteroids",
+    genre: "Action",
+    gameHtml: SHIP,
+    demo: true,
+    createdAt: Date.UTC(2026, 8, 11),
+    marketCapUsd: 5_210_000,
+    volumeUsd: 188_000,
+    change24h: 4.2,
+    sparkline: [6, 7, 7, 9, 8, 11, 13, 12, 14, 16, 15, 18],
+  }),
+  launch({
+    id: "seed-frog",
+    name: "Canal Frog",
+    symbol: "FROG",
+    description: "Hop the logs. Don't splash.",
+    prompt: "frog hopping logs across a toxic canal",
+    genre: "Arcade",
+    gameHtml: FROG,
+    demo: true,
+    createdAt: Date.UTC(2026, 8, 12),
+    marketCapUsd: 3_880_000,
+    volumeUsd: 96_000,
+    change24h: -1.4,
+    sparkline: [9, 9, 10, 9, 11, 10, 12, 11, 13, 12, 14, 13],
+  }),
 ];
 
 export function fallbackGame(prompt: string): { html: string; name: string; symbol: string } {
-  const lower = prompt.toLowerCase();
-  if (lower.includes("pong") || lower.includes("paddle") || lower.includes("ball")) {
-    return { html: PONG, name: "Knot Pong", symbol: "KNOTS" };
+  switch (pickMechanic(prompt)) {
+    case "snake":
+      return { html: SNAKE, name: "Neon Snake", symbol: "SNEK" };
+    case "flappy":
+      return { html: FLAPPY, name: "Pipe Bird", symbol: "PIPE" };
+    case "shooter":
+      return { html: SHIP, name: "Bit Ship", symbol: "SHIP" };
+    case "frogger":
+    case "platformer":
+      return { html: FROG, name: "Canal Frog", symbol: "FROG" };
+    case "pong":
+    case "breakout":
+      return { html: PONG, name: "Knot Pong", symbol: "KNOTS" };
+    case "collector":
+      return { html: CATCH, name: "Drip Catch", symbol: "DRIP" };
+    default:
+      return { html: DODGE, name: "Orbit Cat", symbol: "ZCAT" };
   }
-  if (lower.includes("catch") || lower.includes("coin") || lower.includes("collect")) {
-    return { html: CATCH, name: "Drip Catch", symbol: "DRIP" };
-  }
-  return { html: DODGE, name: "Orbit Cat", symbol: "ZCAT" };
 }

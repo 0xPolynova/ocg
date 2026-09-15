@@ -23,7 +23,9 @@ export function CreateStudio() {
   const wallet = useWallet();
   const router = useRouter();
 
-  const [prompt, setPrompt] = useState("A one-button dodge game where a cat weaves through falling moons");
+  const [prompt, setPrompt] = useState(
+    "Neon snake in a shrinking box — eat bits, don't hit the tail",
+  );
   const [busy, setBusy] = useState<"generate" | "launch" | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export function CreateStudio() {
   async function generate() {
     setBusy("generate");
     setError(null);
-        setStatus("Designing the arcade ROM…");
+        setStatus("Planning the mechanic, then coding the ROM…");
     try {
       const response = await fetch(apiUrl("/api/generate-game"), {
         method: "POST",
@@ -197,7 +199,8 @@ export function CreateStudio() {
                   </div>
                   <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2 text-xs">
                     <span className="text-muted-foreground">
-                      {game.bytes} raw · {game.compressedBytes} gzipped · {game.model}
+                      {game.bytes} raw · {game.compressedBytes} gzipped · {game.mechanic ?? game.genre} ·{" "}
+                      {game.model}
                     </span>
                     <span className={overLimit ? "text-negative" : "text-positive"}>
                       {meter}% of {MAX_GAME_BYTES} byte cap
@@ -281,7 +284,8 @@ export function CreateStudio() {
           <aside className="rounded-2xl border border-border bg-card p-5">
             <h2 className="text-sm font-medium">Launch summary</h2>
             <dl className="mt-4 space-y-3 text-sm">
-              <Summary label="Engine" value="Gemini Flash · arcade kit" />
+              <Summary label="Engine" value="Plan → Gemini Pro" />
+              <Summary label="Mechanic" value={game?.mechanic ?? "—"} />
               <Summary label="Inscribe at" value={`${MAX_GAME_BYTES} byte cap`} />
               <Summary label="ROM size" value={game ? `${game.compressedBytes} bytes` : "—"} />
               <Summary label="Ticker" value={symbol ? `$${symbol}` : "—"} />
@@ -349,6 +353,14 @@ const PROMPTS = [
   {
     label: "Toxic Frog",
     prompt: "Frog hopping logs across a toxic canal, miss and splash",
+  },
+  {
+    label: "Pipe Bird",
+    prompt: "Flappy bird through neon pipes, tap to flap, don't clip the gap",
+  },
+  {
+    label: "Memory Pulse",
+    prompt: "Simon-style memory game: repeat the glowing pad sequence",
   },
 ];
 

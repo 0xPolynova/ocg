@@ -28,6 +28,7 @@ export type GenerateGameResponse = {
   name: string;
   symbol: string;
   genre: Exclude<Genre, "All">;
+  mechanic?: string;
   bytes: number;
   compressedBytes: number;
   model: string;

@@ -9,6 +9,8 @@ export const MAX_GAME_BYTES = 3000;
 export const TARGET_RAW_BYTES = 7800;
 
 export const OPENROUTER_MODEL_DEFAULT = "google/gemini-2.5-flash";
+/** Stronger coder for the HTML pass. Falls back to flash if the key can't call it. */
+export const OPENROUTER_CODE_MODEL_DEFAULT = "google/gemini-2.5-pro";
 
 export const PUMP_FUN_COIN_URL = "https://pump.fun/coin";
 

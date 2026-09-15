@@ -1,5 +1,5 @@
 const CTX_METHODS =
-  "beginPath|closePath|moveTo|lineTo|arc|arcTo|fill|stroke|clip|fillRect|strokeRect|clearRect|fillText|strokeText|save|restore|rect|translate|rotate|scale|setTransform|resetTransform|drawImage|quadraticCurveTo|bezierCurveTo|setLineDash|measureText|createLinearGradient|createRadialGradient";
+  "beginPath|closePath|moveTo|lineTo|arc|arcTo|ellipse|fill|stroke|clip|fillRect|strokeRect|clearRect|fillText|strokeText|save|restore|rect|translate|rotate|scale|setTransform|resetTransform|drawImage|quadraticCurveTo|bezierCurveTo|setLineDash|measureText|createLinearGradient|createRadialGradient";
 
 const CTX_PROPS =
   "fillStyle|strokeStyle|lineWidth|font|textAlign|textBaseline|globalAlpha|lineCap|lineJoin|shadowBlur|shadowColor|shadowOffsetX|shadowOffsetY|globalCompositeOperation|imageSmoothingEnabled";
