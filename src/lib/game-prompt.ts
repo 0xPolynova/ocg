@@ -41,8 +41,9 @@ HOW THIS GENRE WORKS — follow this loop, not a different one
 ${MECHANIC_RECIPES[plan.mechanic]}
 
 CODE SHAPE (required)
-<canvas id=c></canvas> then a script. 2d context lives in ctx. Never store ctx in x,y,w,h,p,s,t,e,n.
-VIEWPORT: on boot and resize set cv.width=innerWidth; cv.height=innerHeight. Every frame let W=innerWidth,H=innerHeight. NEVER hardcode 320/400/640. fillRect(0,0,W,H) the whole world.
+The host already created <canvas id=c> and set canvas, cv, c, and ctx (2d). Use those names. Do not getElementById('canvas'). Do not assume an element id of canvas.
+Never store ctx in x,y,w,h,p,s,t,e,n.
+VIEWPORT: on boot and resize set canvas.width=innerWidth; canvas.height=innerHeight. Every frame let W=innerWidth,H=innerHeight. NEVER hardcode 320/400/640. fillRect(0,0,W,H) the whole world.
 Split drawing into named functions: drawWorld, drawPlayer, drawHazards, drawHUD, drawTitle, drawOver. Keep entities in arrays. Do not dump the whole game into one anonymous loop.
 let mode=0; // 0 title, 1 play, 2 over
 let score=0,best=0;

@@ -23,6 +23,22 @@ requestAnimationFrame=f=>_raf(t=>{f(t);const c=active(),g=c&&c.getContext&&c.get
 function snapSoon(){let n=0;function tick(){n++;if(n<24){_raf(tick);return}try{const c=active();if(!c||c.width<16||c.height<16)return;const s=1000,out=document.createElement('canvas');out.width=s;out.height=s;const g=out.getContext('2d');if(!g)return;g.fillStyle='#041014';g.fillRect(0,0,s,s);const scale=Math.max(s/c.width,s/c.height);const dw=c.width*scale,dh=c.height*scale;g.imageSmoothingEnabled=false;g.drawImage(c,(s-dw)/2,(s-dh)/2,dw,dh);parent.postMessage({type:'ocg-shot',dataUrl:out.toDataURL('image/png')},'*')}catch(err){}}_raf(tick)}
 `;
 
+const CANVAS_ALIASES = `var canvas=cv,gameCanvas=cv;
+window.canvas=cv;window.gameCanvas=cv;window.cv=cv;window.c=cv;window.C=_ctx;window.ctx=_ctx;
+const _id=Document.prototype.getElementById;
+Document.prototype.getElementById=function(id){
+  id=String(id);
+  if(id==='c'||id==='canvas'||id==='gameCanvas'||id==='cv'||id==='screen')return cv;
+  return _id.call(this,id);
+};
+const _qs=Document.prototype.querySelector;
+Document.prototype.querySelector=function(sel){
+  sel=String(sel);
+  if(sel==='canvas'||sel==='#c'||sel==='#canvas'||sel==='#cv'||sel==='#gameCanvas'||sel==='#screen'||sel==='canvas#c'||sel==='canvas#canvas')return cv;
+  return _qs.call(this,sel);
+};
+`;
+
 export function extractGameScript(html: string): string {
   const blocks = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
   if (blocks.length > 0) {
@@ -47,18 +63,20 @@ export function rewriteCanvasContext(script: string): string {
 export function wrapGameHtml(html: string): string {
   const script = rewriteCanvasContext(extractGameScript(html));
   const head = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,user-scalable=no"><title>OCG</title>
-<style>html,body{margin:0;width:100%;height:100%;background:#041014;overflow:hidden;touch-action:none}#c{position:fixed;inset:0;display:block;width:100%;height:100%;background:#041014}#v{position:fixed;inset:0;pointer-events:none;z-index:2;background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(0,0,0,.13) 2px 3px),radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,.42) 100%)}</style>
-<canvas id=c></canvas><div id=v></div><script>
+<style>html,body{margin:0;width:100%;height:100%;background:#041014;overflow:hidden;touch-action:none}#c{position:fixed;inset:0;display:block;width:100%;height:100%;background:#041014}</style>
+<canvas id=c></canvas><script>
 const cv=document.getElementById('c'),_ctx=cv.getContext('2d');
 Object.defineProperty(window,'ctx',{value:_ctx,writable:true,configurable:true});
 Object.defineProperty(window,'cv',{value:cv,writable:true,configurable:true});
 window.c=cv;window.C=_ctx;
+${CANVAS_ALIASES}
 ${VIEWPORT_KIT}
 function boot(){const b=box();if(b.w<80||b.h<80){_raf(boot);return}
+cv.width=b.w;cv.height=b.h;
 try{
 `;
   const tail = `
-}catch(err){_ctx.fillStyle='#f07178';_ctx.font='16px monospace';_ctx.fillText(String(err&&err.message||err),12,32)}
+}catch(err){_ctx.fillStyle='#f07178';_ctx.font='16px sans-serif';_ctx.fillText(String(err&&err.message||err),12,32)}
 snapSoon();
 }
 boot();
