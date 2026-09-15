@@ -80,7 +80,13 @@ export async function hydrateLaunches(): Promise<OcgLaunch[]> {
 
 export async function fetchLaunch(id: string): Promise<OcgLaunch | null> {
   const local = readLaunches().find(
-    (item) => item.id === id || item.mint === id || item.symbol === id,
+    (item) =>
+      item.id === id ||
+      item.mint === id ||
+      item.symbol === id ||
+      item.slug === id ||
+      item.symbol.toLowerCase() === id.toLowerCase() ||
+      item.slug?.toLowerCase() === id.toLowerCase(),
   );
   if (local) return local;
   try {

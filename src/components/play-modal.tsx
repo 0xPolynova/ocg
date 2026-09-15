@@ -5,7 +5,7 @@ import { ExternalLink, X } from "lucide-react";
 import { GameFrame } from "@/components/game-frame";
 import { PUMP_FUN_COIN_URL } from "@/lib/constants";
 import { formatUsd, shortAddress, ticker } from "@/lib/format";
-import { publicPlayUrl } from "@/lib/site";
+import { launchSlug, playPath, publicPlayUrl } from "@/lib/site";
 import type { OcgLaunch } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +18,8 @@ export function PlayModal({
   onClose?: () => void;
   variant?: "overlay" | "page";
 }) {
-  const playUrl = launch.playUrl ?? (launch.mint ? publicPlayUrl(launch.mint) : undefined);
+  const slug = launchSlug(launch);
+  const playUrl = launch.playUrl ?? publicPlayUrl(slug);
   const page = variant === "page";
 
   return (
@@ -59,6 +60,7 @@ function PlayBody({
   onClose?: () => void;
   page?: boolean;
 }) {
+  const slug = launchSlug(launch);
   return (
     <>
       <div className="relative aspect-[16/10] w-full bg-[#041014]">
@@ -86,12 +88,12 @@ function PlayBody({
           <Row label="Size" value={`${launch.gameBytes} bytes`} />
           <Row label="Market cap" value={formatUsd(launch.marketCapUsd)} />
           <Row label="Mint" value={shortAddress(launch.mint, 6)} />
-          <Row label="Play URL" value={playUrl ? "launchocg.com/play/…" : launch.demo ? "Demo" : "Local"} />
+          <Row label="Play URL" value={playUrl ? `launchocg.com/${slug}` : launch.demo ? "Demo" : "Local"} />
         </dl>
         <div className="mt-auto flex flex-col gap-2">
           {launch.mint && !page ? (
             <a
-              href={`/play/${launch.mint}`}
+              href={playPath(slug)}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border font-medium"
             >
               Open play page <ExternalLink className="size-4" />

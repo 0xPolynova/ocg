@@ -13,7 +13,7 @@ import { SiteHeader } from "@/components/site-header";
 import { WalletButton } from "@/components/wallet-ui";
 import { apiUrl } from "@/lib/api";
 import { utf8Bytes } from "@/lib/game-codec";
-import { upsertLaunch } from "@/lib/launches-store";
+import { upsertLaunch, fetchLaunch } from "@/lib/launches-store";
 import {
   formatTokenAmount,
   PUMP_MAX_CURVE_PCT,
@@ -22,7 +22,7 @@ import {
   supplyPctForSol,
 } from "@/lib/pump-curve";
 import { createPumpToken, uploadPumpMetadata } from "@/lib/pump-launch";
-import { publicPlayUrl } from "@/lib/site";
+import { allocatePlaySlug, publicPlayUrl, tickerSlug } from "@/lib/site";
 import type { GenerateGameResponse, OcgLaunch } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -100,7 +100,8 @@ export function CreateStudio() {
     try {
       const mintKeypair = Keypair.generate();
       const mint = mintKeypair.publicKey.toBase58();
-      const gameUrl = publicPlayUrl(mint);
+      const slug = await allocatePlaySlug(symbol, mint, fetchLaunch);
+      const gameUrl = publicPlayUrl(slug);
 
       setStatus("Uploading token metadata…");
       const uri = await uploadPumpMetadata({
@@ -143,6 +144,7 @@ export function CreateStudio() {
         compressedBytes: game.compressedBytes,
         mint,
         creator: wallet.publicKey.toBase58(),
+        slug,
         playUrl: gameUrl,
         storeSignatures: [],
         createSignature: created.signature,
@@ -371,7 +373,10 @@ export function CreateStudio() {
             <dl className="mt-4 space-y-3 text-sm">
               <Summary label="Engine" value="Qwen3 Coder" />
               <Summary label="Mechanic" value={game?.mechanic ?? "—"} />
-              <Summary label="Hosted at" value="launchocg.com/play/<mint>" />
+              <Summary
+                label="Hosted at"
+                value={symbol ? `launchocg.com/${tickerSlug(symbol)}` : "launchocg.com/TICKER"}
+              />
               <Summary label="Game size" value={game ? `${game.bytes} bytes` : "—"} />
               <Summary label="Ticker" value={symbol ? `$${symbol}` : "—"} />
               <Summary label="Supply" value="1B on Pump.fun curve" />

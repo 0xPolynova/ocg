@@ -13,6 +13,7 @@ export type OcgLaunch = {
   image?: string;
   mint?: string;
   creator?: string;
+  slug?: string;
   playUrl?: string;
   storeSignatures: string[];
   createSignature?: string;

@@ -1,7 +1,7 @@
 import { Pool } from "pg";
 
 import type { Genre } from "../src/lib/constants";
-import { publicPlayUrl } from "../src/lib/site";
+import { publicPlayUrl, tickerSlug } from "../src/lib/site";
 import type { OcgLaunch } from "../src/lib/types";
 
 type LaunchRow = {
@@ -17,6 +17,7 @@ type LaunchRow = {
   compressed_bytes: number;
   image: string | null;
   creator: string | null;
+  slug: string | null;
   store_signatures: string[];
   create_signature: string | null;
   created_at: string | number;
@@ -63,7 +64,8 @@ function fromRow(row: LaunchRow): OcgLaunch {
     compressedBytes: Number(row.compressed_bytes),
     image: row.image ?? undefined,
     creator: row.creator ?? undefined,
-    playUrl: row.mint ? publicPlayUrl(row.mint) : undefined,
+    slug: row.slug ?? tickerSlug(row.symbol),
+    playUrl: publicPlayUrl(row.slug ?? tickerSlug(row.symbol)),
     storeSignatures: row.store_signatures ?? [],
     createSignature: row.create_signature ?? undefined,
     createdAt: Number(row.created_at),
@@ -104,7 +106,15 @@ export async function ensureLaunchSchema(): Promise<void> {
           sparkline JSONB NOT NULL DEFAULT '[]'::jsonb
         );
         CREATE INDEX IF NOT EXISTS launches_created_at_idx ON launches (created_at DESC);
-        CREATE INDEX IF NOT EXISTS launches_mint_idx ON launches (mint);`,
+        CREATE INDEX IF NOT EXISTS launches_mint_idx ON launches (mint);
+        ALTER TABLE launches ADD COLUMN IF NOT EXISTS slug TEXT;
+        UPDATE launches
+          SET slug = UPPER(REGEXP_REPLACE(COALESCE(symbol, 'GAME'), '[^a-zA-Z0-9]', '', 'g'))
+          WHERE slug IS NULL OR slug = '';
+        UPDATE launches l
+          SET slug = l.slug || '-' || LEFT(l.id, 4)
+          WHERE l.ctid NOT IN (SELECT MIN(ctid) FROM launches GROUP BY slug);
+        CREATE UNIQUE INDEX IF NOT EXISTS launches_slug_idx ON launches (slug);`,
       )
       .then(() => undefined);
   }
@@ -126,11 +136,19 @@ export async function getLaunch(id: string): Promise<OcgLaunch | null> {
   const db = getPool();
   if (!db) {
     return (
-      [...memory.values()].find((item) => item.id === id || item.mint === id || item.symbol === id) ?? null
+      [...memory.values()].find(
+        (item) =>
+          item.id === id ||
+          item.mint === id ||
+          item.symbol === id ||
+          item.slug === id ||
+          item.symbol.toLowerCase() === id.toLowerCase() ||
+          item.slug?.toLowerCase() === id.toLowerCase(),
+      ) ?? null
     );
   }
   const result = await db.query<LaunchRow>(
-    "SELECT * FROM launches WHERE id = $1 OR mint = $1 OR symbol = $1 LIMIT 1",
+    "SELECT * FROM launches WHERE id = $1 OR mint = $1 OR symbol = $1 OR slug = $1 OR LOWER(symbol) = LOWER($1) OR LOWER(slug) = LOWER($1) LIMIT 1",
     [id],
   );
   return result.rows[0] ? fromRow(result.rows[0]) : null;
@@ -146,10 +164,10 @@ export async function upsertLaunchRecord(launch: OcgLaunch): Promise<OcgLaunch> 
   await db.query(
     `INSERT INTO launches (
       id, mint, name, symbol, description, prompt, genre, game_html, game_bytes, compressed_bytes,
-      image, creator, store_signatures, create_signature, created_at, demo, market_cap_usd, volume_usd,
+      image, creator, slug, store_signatures, create_signature, created_at, demo, market_cap_usd, volume_usd,
       change_24h, sparkline
     ) VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18,$19,$20::jsonb
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16,$17,$18,$19,$20,$21::jsonb
     )
     ON CONFLICT (id) DO UPDATE SET
       mint = EXCLUDED.mint,
@@ -163,6 +181,7 @@ export async function upsertLaunchRecord(launch: OcgLaunch): Promise<OcgLaunch> 
       compressed_bytes = EXCLUDED.compressed_bytes,
       image = EXCLUDED.image,
       creator = EXCLUDED.creator,
+      slug = EXCLUDED.slug,
       store_signatures = EXCLUDED.store_signatures,
       create_signature = EXCLUDED.create_signature,
       demo = EXCLUDED.demo,
@@ -183,6 +202,7 @@ export async function upsertLaunchRecord(launch: OcgLaunch): Promise<OcgLaunch> 
       launch.compressedBytes,
       launch.image ?? null,
       launch.creator ?? null,
+      launch.slug ?? tickerSlug(launch.symbol),
       JSON.stringify(launch.storeSignatures ?? []),
       launch.createSignature ?? null,
       launch.createdAt,
@@ -222,12 +242,18 @@ export function parseLaunchBody(body: unknown): OcgLaunch | null {
     image: typeof value.image === "string" ? value.image : undefined,
     mint: typeof value.mint === "string" ? value.mint : undefined,
     creator: typeof value.creator === "string" ? value.creator : undefined,
+    slug:
+      typeof value.slug === "string" && value.slug
+        ? value.slug.replace(/[^a-zA-Z0-9-]/g, "").toUpperCase().slice(0, 16)
+        : tickerSlug(value.symbol),
     playUrl:
       typeof value.playUrl === "string"
         ? value.playUrl
-        : typeof value.mint === "string"
-          ? publicPlayUrl(value.mint)
-          : undefined,
+        : publicPlayUrl(
+            typeof value.slug === "string" && value.slug
+              ? value.slug
+              : tickerSlug(value.symbol),
+          ),
     storeSignatures: Array.isArray(value.storeSignatures)
       ? value.storeSignatures.filter((item): item is string => typeof item === "string")
       : [],

@@ -139,8 +139,11 @@ function launch(
     sparkline?: number[];
   },
 ): OcgLaunch {
+  const slug = partial.slug ?? partial.symbol.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
   return {
     ...partial,
+    slug,
+    playUrl: partial.playUrl ?? `https://launchocg.com/${slug}`,
     gameBytes: utf8Bytes(partial.gameHtml),
     compressedBytes: compressGame(partial.gameHtml).byteLength,
     storeSignatures: [],
