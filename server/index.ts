@@ -25,17 +25,26 @@ const allowedOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:3000")
   .map((value) => value.trim())
   .filter(Boolean);
 
+function isAllowedOrigin(origin: string): boolean {
+  if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) return true;
+  try {
+    const host = new URL(origin).hostname;
+    return (
+      host === "localhost" ||
+      host.endsWith(".localhost") ||
+      host.endsWith(".onrender.com") ||
+      host === "launchocg.com" ||
+      host.endsWith(".launchocg.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (
-        !origin ||
-        allowedOrigins.includes("*") ||
-        allowedOrigins.includes(origin) ||
-        origin.includes("localhost") ||
-        origin.endsWith(".onrender.com") ||
-        origin.endsWith("launchocg.com")
-      ) {
+      if (!origin || isAllowedOrigin(origin)) {
         callback(null, true);
         return;
       }
