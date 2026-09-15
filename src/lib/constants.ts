@@ -5,8 +5,8 @@ export const APP_DESCRIPTION =
 
 /** Hard cap for gzipped game bytes stored in Solana instruction data. */
 export const MAX_GAME_BYTES = 3000;
-/** Ask the model to stay under this so gzip + headers still fit. */
-export const TARGET_RAW_BYTES = 2800;
+/** Raw HTML budget. Gzip of tight JS is ~2.5–3×, so this still fits on-chain. */
+export const TARGET_RAW_BYTES = 7800;
 
 export const OPENROUTER_MODEL_DEFAULT = "google/gemini-2.5-flash";
 

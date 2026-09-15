@@ -20,19 +20,82 @@ export function extractHtml(text: string): string {
 
 export function inferGenre(prompt: string): "Arcade" | "Action" | "Puzzle" | "Reflex" | "Custom" {
   const value = prompt.toLowerCase();
-  if (/(dodge|reflex|reaction|flappy)/.test(value)) return "Reflex";
+  if (/(dodge|reflex|reaction|flappy|weave|avoid)/.test(value)) return "Reflex";
   if (/(puzzle|match|slide|sokoban)/.test(value)) return "Puzzle";
-  if (/(shoot|slash|fight|action)/.test(value)) return "Action";
-  if (/(pong|catch|jump|arcade|snake)/.test(value)) return "Arcade";
+  if (/(shoot|slash|fight|action|blast)/.test(value)) return "Action";
+  if (/(pong|catch|jump|arcade|snake|collect)/.test(value)) return "Arcade";
   return "Custom";
 }
+
+const STOPWORDS = new Set([
+  "the",
+  "and",
+  "for",
+  "with",
+  "from",
+  "that",
+  "this",
+  "your",
+  "you",
+  "are",
+  "was",
+  "game",
+  "tiny",
+  "mini",
+  "make",
+  "where",
+  "when",
+  "then",
+  "just",
+  "like",
+  "one",
+  "play",
+  "please",
+  "html",
+  "canvas",
+  "simple",
+  "small",
+  "build",
+  "create",
+  "about",
+  "into",
+  "over",
+  "under",
+  "button",
+  "click",
+  "using",
+  "have",
+  "will",
+  "can",
+  "them",
+  "they",
+  "but",
+  "not",
+  "any",
+  "all",
+  "out",
+  "get",
+  "how",
+  "who",
+  "why",
+  "via",
+  "per",
+  "through",
+  "a",
+  "an",
+]);
 
 export function inferTicker(prompt: string): { name: string; symbol: string } {
   const words = prompt
     .replace(/[^a-zA-Z0-9\s]/g, " ")
     .split(/\s+/)
-    .filter((word) => word.length > 2);
-  const name = words.slice(0, 2).join(" ") || "OnChain Game";
-  const symbol = (words[0] ?? "OCG").slice(0, 6).toUpperCase();
+    .map((word) => word.trim())
+    .filter((word) => word.length > 2 && !STOPWORDS.has(word.toLowerCase()));
+  const pick = words.slice(-2);
+  const name =
+    pick.length > 0
+      ? pick.map((word) => word[0]?.toUpperCase() + word.slice(1).toLowerCase()).join(" ")
+      : "OnChain Game";
+  const symbol = (pick[pick.length - 1] ?? words[0] ?? "OCG").slice(0, 6).toUpperCase();
   return { name, symbol };
 }

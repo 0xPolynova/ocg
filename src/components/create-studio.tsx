@@ -46,7 +46,7 @@ export function CreateStudio() {
   async function generate() {
     setBusy("generate");
     setError(null);
-    setStatus("Asking Gemini Flash on OpenRouter…");
+        setStatus("Designing the arcade ROM…");
     try {
       const response = await fetch(apiUrl("/api/generate-game"), {
         method: "POST",
@@ -150,8 +150,8 @@ export function CreateStudio() {
         <div className="max-w-xl">
           <h1 className="text-3xl font-semibold tracking-tight">Create a game</h1>
           <p className="mt-2 text-muted-foreground">
-            Prompt a tiny Flash-style game. Gemini Flash builds a ROM under {MAX_GAME_BYTES.toLocaleString()}{" "}
-            bytes, we inscribe it on Solana, then mint the Pump.fun token.
+            Prompt a real micro-arcade: title screen, sprites that match the idea, juice, then a Pump.fun
+            token. ROMs stay under {MAX_GAME_BYTES.toLocaleString()} gzipped bytes so they fit on Solana.
           </p>
         </div>
 
@@ -166,6 +166,18 @@ export function CreateStudio() {
                 placeholder="A microscopic snake game with neon walls"
               />
             </Field>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {PROMPTS.map((idea) => (
+                <button
+                  key={idea.label}
+                  type="button"
+                  onClick={() => setPrompt(idea.prompt)}
+                  className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                >
+                  {idea.label}
+                </button>
+              ))}
+            </div>
 
             <button
               type="button"
@@ -261,7 +273,7 @@ export function CreateStudio() {
               </div>
             ) : (
               <div className="mt-6 rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">
-                Generate a ROM first. Keep the idea small — one mechanic, no assets, instant restart.
+                Generate a ROM first. One mechanic, a character you can recognize, instant restart.
               </div>
             )}
           </section>
@@ -269,7 +281,7 @@ export function CreateStudio() {
           <aside className="rounded-2xl border border-border bg-card p-5">
             <h2 className="text-sm font-medium">Launch summary</h2>
             <dl className="mt-4 space-y-3 text-sm">
-              <Summary label="Engine" value="Gemini Flash · OpenRouter" />
+              <Summary label="Engine" value="Gemini Flash · arcade kit" />
               <Summary label="Inscribe at" value={`${MAX_GAME_BYTES} byte cap`} />
               <Summary label="ROM size" value={game ? `${game.compressedBytes} bytes` : "—"} />
               <Summary label="Ticker" value={symbol ? `$${symbol}` : "—"} />
@@ -320,6 +332,25 @@ export function CreateStudio() {
     </div>
   );
 }
+
+const PROMPTS = [
+  {
+    label: "Orbit Cat",
+    prompt: "A one-button dodge game where a cat weaves through falling moons",
+  },
+  {
+    label: "Neon Snake",
+    prompt: "Neon snake in a shrinking box — eat bits, don't hit the tail",
+  },
+  {
+    label: "Asteroids",
+    prompt: "Tiny spaceship blasting incoming asteroids, one-tap fire",
+  },
+  {
+    label: "Toxic Frog",
+    prompt: "Frog hopping logs across a toxic canal, miss and splash",
+  },
+];
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
