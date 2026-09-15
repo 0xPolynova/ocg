@@ -60,7 +60,12 @@ export function CreateStudio() {
       setSymbol(json.symbol);
       setStatus(json.fallback ? json.error ?? "Used a compact fallback ROM." : "Game compiled. Play it, then launch.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Generation failed.");
+      const message = err instanceof Error ? err.message : "Generation failed.";
+      setError(
+        message === "Failed to fetch"
+          ? "Could not reach the game API. Check that ocg-api is live."
+          : message,
+      );
     } finally {
       setBusy(null);
     }

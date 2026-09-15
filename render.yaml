@@ -27,8 +27,5 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "24"
-      - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: ocg-api
-          envVarKey: RENDER_EXTERNAL_URL
+      - key: API_URL
+        value: https://ocg-api.onrender.com
