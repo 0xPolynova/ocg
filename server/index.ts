@@ -216,6 +216,7 @@ app.post("/api/pump/create-tx", async (req, res) => {
       lastValidBlockHeight: built.lastValidBlockHeight,
       buyLamports: built.solLamports.toString(),
       buyTokens: built.tokenAmount.toString(),
+      simulation: built.simulation,
     });
   } catch (error) {
     res.status(400).json({
