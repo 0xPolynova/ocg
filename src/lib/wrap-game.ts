@@ -21,29 +21,22 @@ addEventListener('pointerdown',()=>{try{_ac&&_ac.resume()}catch(e){}});
 const _raf=requestAnimationFrame.bind(window);
 requestAnimationFrame=f=>_raf(t=>{f(t);const c=active(),g=c&&c.getContext&&c.getContext('2d');if(g){for(let i=_bits.length;i--;){const p=_bits[i];p.x+=p.vx;p.y+=p.vy;p.vy+=.16;p.l--;g.globalAlpha=Math.max(0,p.l/20);g.fillStyle=p.col;g.fillRect(p.x,p.y,3,3);if(p.l<=0)_bits.splice(i,1)}g.globalAlpha=1}if(c){if(_sh>0.4){c.style.transform='translate('+((Math.random()-.5)*_sh)+'px,'+((Math.random()-.5)*_sh)+'px)'}else{c.style.transform='none'}_sh*=.84}});
 function snapSoon(){let n=0;function tick(){n++;if(n<24){_raf(tick);return}try{const c=active();if(!c||c.width<16||c.height<16)return;const s=1000,out=document.createElement('canvas');out.width=s;out.height=s;const g=out.getContext('2d');if(!g)return;g.fillStyle='#041014';g.fillRect(0,0,s,s);const scale=Math.max(s/c.width,s/c.height);const dw=c.width*scale,dh=c.height*scale;g.imageSmoothingEnabled=false;g.drawImage(c,(s-dw)/2,(s-dh)/2,dw,dh);parent.postMessage({type:'ocg-shot',dataUrl:out.toDataURL('image/png')},'*')}catch(err){}}_raf(tick)}
-`;
-
-const CANVAS_ALIASES = `var canvas=cv,gameCanvas=cv;
-window.canvas=cv;window.gameCanvas=cv;window.cv=cv;window.c=cv;window.C=_ctx;window.ctx=_ctx;
-const _id=Document.prototype.getElementById;
-Document.prototype.getElementById=function(id){
-  id=String(id);
-  if(id==='c'||id==='canvas'||id==='gameCanvas'||id==='cv'||id==='screen')return cv;
-  return _id.call(this,id);
-};
-const _qs=Document.prototype.querySelector;
-Document.prototype.querySelector=function(sel){
-  sel=String(sel);
-  if(sel==='canvas'||sel==='#c'||sel==='#canvas'||sel==='#cv'||sel==='#gameCanvas'||sel==='#screen'||sel==='canvas#c'||sel==='canvas#canvas')return cv;
-  return _qs.call(this,sel);
-};
+function paintErr(err){try{const b=box();cv.width=b.w;cv.height=b.h;_ctx.fillStyle='#041014';_ctx.fillRect(0,0,cv.width,cv.height);_ctx.fillStyle='#f07178';_ctx.font='14px sans-serif';_ctx.fillText(String(err&&err.message||err),16,36)}catch(e){}}
 `;
 
 export function extractGameScript(html: string): string {
-  const blocks = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
-  if (blocks.length > 0) {
-    return blocks.map((match) => match[1] ?? "").join("\n");
-  }
+  const blocks = [...html.matchAll(/<script(\b[^>]*)>([\s\S]*?)<\/script>/gi)];
+  const code = blocks
+    .filter((match) => {
+      const attrs = match[1] ?? "";
+      if (/\bsrc\s*=/.test(attrs)) return false;
+      if (/\btype\s*=/.test(attrs) && !/javascript|ecmascript|module/i.test(attrs)) return false;
+      return true;
+    })
+    .map((match) => match[2] ?? "")
+    .join("\n")
+    .trim();
+  if (code) return code;
   if (!/<canvas[\s>]/i.test(html) && !/<html[\s>]/i.test(html)) return html;
   return html.replace(/<[^>]+>/g, " ").trim();
 }
@@ -57,29 +50,38 @@ export function rewriteCanvasContext(script: string): string {
     new RegExp(`\\b(?!ctx\\b)(?!this\\b)[A-Za-z_$][\\w$]*\\.(${CTX_PROPS})\\s*=`, "g"),
     "ctx.$1=",
   );
-  return next.replace(/<\/script/gi, "<\\/script");
+  return next;
+}
+
+function payloadLiteral(script: string): string {
+  return JSON.stringify(script).replace(/</g, "\\u003c");
 }
 
 export function wrapGameHtml(html: string): string {
   const script = rewriteCanvasContext(extractGameScript(html));
-  const head = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,user-scalable=no"><title>OCG</title>
+  const payload = payloadLiteral(script);
+  return `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,user-scalable=no"><title>OCG</title>
 <style>html,body{margin:0;width:100%;height:100%;background:#041014;overflow:hidden;touch-action:none}#c{position:fixed;inset:0;display:block;width:100%;height:100%;background:#041014}</style>
 <canvas id=c></canvas><script>
 const cv=document.getElementById('c'),_ctx=cv.getContext('2d');
-Object.defineProperty(window,'ctx',{value:_ctx,writable:true,configurable:true});
-Object.defineProperty(window,'cv',{value:cv,writable:true,configurable:true});
-window.c=cv;window.C=_ctx;
-${CANVAS_ALIASES}
+window.cv=cv;window.c=cv;window.canvas=cv;window.gameCanvas=cv;window.C=_ctx;window.ctx=_ctx;
+document.getElementById=function(id){
+  id=String(id);
+  if(id==='c'||id==='canvas'||id==='gameCanvas'||id==='cv'||id==='screen')return cv;
+  return Document.prototype.getElementById.call(document,id);
+};
+document.querySelector=function(sel){
+  sel=String(sel);
+  if(sel==='canvas'||sel==='#c'||sel==='#canvas'||sel==='#cv'||sel==='#gameCanvas'||sel==='#screen'||sel==='canvas#c'||sel==='canvas#canvas')return cv;
+  return Document.prototype.querySelector.call(document,sel);
+};
 ${VIEWPORT_KIT}
+const OCG_SRC=${payload};
 function boot(){const b=box();if(b.w<80||b.h<80){_raf(boot);return}
-cv.width=b.w;cv.height=b.h;
-try{
-`;
-  const tail = `
-}catch(err){_ctx.fillStyle='#f07178';_ctx.font='16px sans-serif';_ctx.fillText(String(err&&err.message||err),12,32)}
+if(!cv.width||!cv.height){cv.width=b.w;cv.height=b.h}
+try{(0,eval)(OCG_SRC)}catch(err){paintErr(err)}
 snapSoon();
 }
 boot();
 </script>`;
-  return head + script + tail;
 }

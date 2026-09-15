@@ -26,6 +26,7 @@ import {
   wrongGamePrompt,
 } from "./game-prompt";
 import { extractHtml } from "./minify-game";
+import { extractGameScript } from "./wrap-game";
 import { fallbackGame } from "./seed-games";
 import type { GenerateGameResponse } from "./types";
 
@@ -234,7 +235,20 @@ export async function generateGameFromPrompt(prompt: string): Promise<{
       usedModel = made.model;
     }
 
-    if (!/requestAnimationFrame/.test(html)) {
+    const scriptChars = extractGameScript(html).length;
+    console.log(
+      JSON.stringify({
+        event: "generate-game",
+        model: usedModel,
+        mechanic: plan.mechanic,
+        bytes: utf8Bytes(html),
+        scriptChars,
+        hasRaf: /requestAnimationFrame/.test(html),
+        hasCanvas: /<canvas[\s>]/i.test(html),
+      }),
+    );
+
+    if (!/requestAnimationFrame/.test(html) || scriptChars < 80) {
       const demo = fallbackGame(trimmed);
       const result = pack(
         demo.html,
