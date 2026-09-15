@@ -3,7 +3,7 @@
 import { ExternalLink, X } from "lucide-react";
 
 import { GameFrame } from "@/components/game-frame";
-import { PUMP_FUN_COIN_URL, SOLSCAN_TOKEN_URL, SOLSCAN_TX_URL } from "@/lib/constants";
+import { PUMP_FUN_COIN_URL, SOLSCAN_TX_URL, solscanTokenUrl } from "@/lib/constants";
 import { formatUsd, shortAddress, ticker } from "@/lib/format";
 import { launchSlug, playPath, publicPlayUrl } from "@/lib/site";
 import type { OcgLaunch } from "@/lib/types";
@@ -105,7 +105,7 @@ function PlayMeta({
         {launch.mint ? (
           <>
             <PlayLink href={`${PUMP_FUN_COIN_URL}/${launch.mint}`} label="Pump.fun" external primary />
-            <PlayLink href={`${SOLSCAN_TOKEN_URL}/${launch.mint}`} label="Solscan" external />
+            <PlayLink href={solscanTokenUrl(launch.mint)} label="Solscan" external />
             {tx ? <PlayLink href={`${SOLSCAN_TX_URL}/${tx}`} label="Game tx" external /> : null}
           </>
         ) : (

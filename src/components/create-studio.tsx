@@ -11,7 +11,7 @@ import { GamePromptChat } from "@/components/game-prompt-chat";
 import { RomCabinet } from "@/components/rom-cabinet";
 import { SiteHeader } from "@/components/site-header";
 import { WalletButton } from "@/components/wallet-ui";
-import { STUDIO_MAX_DRAFTS, APP_PITCH, PUMP_FUN_COIN_URL, SOLSCAN_TOKEN_URL, SOLSCAN_TX_URL } from "@/lib/constants";
+import { STUDIO_MAX_DRAFTS, APP_PITCH, PUMP_FUN_COIN_URL, SOLSCAN_TX_URL, solscanTokenUrl } from "@/lib/constants";
 import { utf8Bytes } from "@/lib/game-codec";
 import { upsertLaunch, fetchLaunch } from "@/lib/launches-store";
 import {
@@ -408,7 +408,7 @@ export function CreateStudio() {
                               primary
                             />
                             <LiveLink
-                              href={`${SOLSCAN_TOKEN_URL}/${active.mint}`}
+                              href={solscanTokenUrl(active.mint)}
                               label="Solscan"
                               delay={0.12}
                             />
