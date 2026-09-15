@@ -19,6 +19,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: `${APP_NAME} · ${APP_TAGLINE}`,
   description: APP_DESCRIPTION,
+  icons: {
+    icon: "/logos/weblogoocg.png",
+    apple: "/logos/weblogoocg.png",
+    shortcut: "/logos/weblogoocg.png",
+  },
 };
 
 export default function RootLayout({

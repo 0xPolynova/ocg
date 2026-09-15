@@ -1,10 +1,14 @@
 import Link from "next/link";
 
+import { BrandLogo } from "@/components/brand-logo";
+
 export function SiteFooter() {
   return (
     <footer className="mt-auto border-t border-border/70">
       <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-5 gap-y-2 px-4 py-6 text-sm text-muted-foreground md:px-6">
-        <span className="font-medium text-foreground">OCG</span>
+        <Link href="/" className="inline-flex items-center">
+          <BrandLogo className="h-6 w-auto" />
+        </Link>
         <Link href="/" className="hover:text-foreground">
           Launches
         </Link>

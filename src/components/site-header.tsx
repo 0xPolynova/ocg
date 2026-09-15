@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { Search } from "lucide-react";
 
-import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
+import { BrandLogo } from "@/components/brand-logo";
+import { APP_TAGLINE } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 export function SiteHeader({
@@ -20,8 +21,8 @@ export function SiteHeader({
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-[1400px] items-center gap-4 px-4 md:px-6">
-        <Link href="/" className="flex shrink-0 items-baseline gap-2">
-          <span className="text-lg font-semibold tracking-tight">{APP_NAME}</span>
+        <Link href="/" className="flex shrink-0 items-center gap-2">
+          <BrandLogo priority className="h-8 w-auto" />
           <span className="hidden text-xs text-muted-foreground sm:inline">{APP_TAGLINE}</span>
         </Link>
 
