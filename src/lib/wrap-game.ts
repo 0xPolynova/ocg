@@ -20,6 +20,7 @@ window.beep=beep;window.burst=burst;window.shake=shake;
 addEventListener('pointerdown',()=>{try{_ac&&_ac.resume()}catch(e){}});
 const _raf=requestAnimationFrame.bind(window);
 requestAnimationFrame=f=>_raf(t=>{f(t);const c=active(),g=c&&c.getContext&&c.getContext('2d');if(g){for(let i=_bits.length;i--;){const p=_bits[i];p.x+=p.vx;p.y+=p.vy;p.vy+=.16;p.l--;g.globalAlpha=Math.max(0,p.l/20);g.fillStyle=p.col;g.fillRect(p.x,p.y,3,3);if(p.l<=0)_bits.splice(i,1)}g.globalAlpha=1}if(c){if(_sh>0.4){c.style.transform='translate('+((Math.random()-.5)*_sh)+'px,'+((Math.random()-.5)*_sh)+'px)'}else{c.style.transform='none'}_sh*=.84}});
+function snapSoon(){let n=0;function tick(){n++;if(n<24){_raf(tick);return}try{const c=active();if(!c||c.width<16||c.height<16)return;const s=1000,out=document.createElement('canvas');out.width=s;out.height=s;const g=out.getContext('2d');if(!g)return;g.fillStyle='#041014';g.fillRect(0,0,s,s);const scale=Math.max(s/c.width,s/c.height);const dw=c.width*scale,dh=c.height*scale;g.imageSmoothingEnabled=false;g.drawImage(c,(s-dw)/2,(s-dh)/2,dw,dh);parent.postMessage({type:'ocg-shot',dataUrl:out.toDataURL('image/png')},'*')}catch(err){}}_raf(tick)}
 `;
 
 export function extractGameScript(html: string): string {
@@ -40,12 +41,12 @@ export function rewriteCanvasContext(script: string): string {
     new RegExp(`\\b(?!ctx\\b)(?!this\\b)[A-Za-z_$][\\w$]*\\.(${CTX_PROPS})\\s*=`, "g"),
     "ctx.$1=",
   );
-  return next;
+  return next.replace(/<\/script/gi, "<\\/script");
 }
 
 export function wrapGameHtml(html: string): string {
   const script = rewriteCanvasContext(extractGameScript(html));
-  return `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,user-scalable=no"><title>OCG</title>
+  const head = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,user-scalable=no"><title>OCG</title>
 <style>html,body{margin:0;width:100%;height:100%;background:#041014;overflow:hidden;touch-action:none}#c{position:fixed;inset:0;display:block;width:100%;height:100%;background:#041014}#v{position:fixed;inset:0;pointer-events:none;z-index:2;background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(0,0,0,.13) 2px 3px),radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,.42) 100%)}</style>
 <canvas id=c></canvas><div id=v></div><script>
 const cv=document.getElementById('c'),_ctx=cv.getContext('2d');
@@ -54,9 +55,13 @@ Object.defineProperty(window,'cv',{value:cv,writable:true,configurable:true});
 window.c=cv;window.C=_ctx;
 ${VIEWPORT_KIT}
 function boot(){const b=box();if(b.w<80||b.h<80){_raf(boot);return}
-try{${script}}
-catch(err){_ctx.fillStyle='#f07178';_ctx.font='16px monospace';_ctx.fillText(String(err&&err.message||err),12,32)}
+try{
+`;
+  const tail = `
+}catch(err){_ctx.fillStyle='#f07178';_ctx.font='16px monospace';_ctx.fillText(String(err&&err.message||err),12,32)}
+snapSoon();
 }
 boot();
 </script>`;
+  return head + script + tail;
 }

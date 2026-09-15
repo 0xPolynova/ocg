@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 
 import { FilterChips, LaunchCard } from "@/components/launch-card";
 import { PlayModal } from "@/components/play-modal";
@@ -8,7 +9,6 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { hydrateLaunches, readLaunches, subscribeLaunches, getEmptyLaunches } from "@/lib/launches-store";
 import { fetchPumpStats } from "@/lib/pump-launch";
-import { SEED_LAUNCHES } from "@/lib/seed-games";
 import type { OcgLaunch } from "@/lib/types";
 
 export function LaunchesView() {
@@ -59,11 +59,7 @@ export function LaunchesView() {
   );
 
   const launches = useMemo(() => {
-    const merged = [
-      ...local,
-      ...SEED_LAUNCHES.filter((seed) => !local.some((item) => item.id === seed.id)),
-    ];
-    return merged.filter((launch) => {
+    return local.filter((launch) => {
       const matchesGenre = genre === "All" || launch.genre === genre;
       const haystack = `${launch.name} ${launch.symbol} ${launch.description}`.toLowerCase();
       return matchesGenre && haystack.includes(query.toLowerCase());
@@ -90,9 +86,19 @@ export function LaunchesView() {
           {genre === "All" ? "All games" : genre}
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {launches.map((launch) => (
-            <LaunchCard key={launch.id} launch={launch} onPlay={setPlaying} />
-          ))}
+          {launches.length === 0 ? (
+            <p className="col-span-full rounded-2xl border border-dashed border-border px-5 py-10 text-sm text-muted-foreground">
+              No games launched yet.{" "}
+              <Link href="/create" className="text-foreground underline underline-offset-4">
+                Create the first one
+              </Link>
+              .
+            </p>
+          ) : (
+            launches.map((launch) => (
+              <LaunchCard key={launch.id} launch={launch} onPlay={setPlaying} />
+            ))
+          )}
         </div>
       </main>
       <SiteFooter />

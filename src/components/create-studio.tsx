@@ -3,9 +3,9 @@
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { Keypair } from "@solana/web3.js";
 import { AnimatePresence, motion } from "framer-motion";
-import { Info, Lock, Sparkles, Wand2 } from "lucide-react";
+import { Check, Info, Lock, Sparkles, Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { RomCabinet } from "@/components/rom-cabinet";
 import { SiteFooter } from "@/components/site-footer";
@@ -23,6 +23,7 @@ import {
 } from "@/lib/pump-curve";
 import { createPumpToken, uploadPumpMetadata } from "@/lib/pump-launch";
 import { allocatePlaySlug, publicPlayUrl, tickerSlug } from "@/lib/site";
+import { dataUrlToPngFile } from "@/lib/token-art";
 import type { GenerateGameResponse, OcgLaunch } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +43,8 @@ export function CreateStudio() {
   const [symbol, setSymbol] = useState("");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const imageCustom = useRef(false);
   const [twitter, setTwitter] = useState("");
   const [telegram, setTelegram] = useState("");
   const [website, setWebsite] = useState("");
@@ -75,6 +78,10 @@ export function CreateStudio() {
       setName(json.name);
       setSymbol(json.symbol);
       setDescription(prompt.slice(0, 200));
+      setWebsite("");
+      setImage(null);
+      setImagePreview(null);
+      imageCustom.current = false;
       setStatus(json.fallback ? json.error ?? "Used a compact fallback ROM." : "Game ready. Play it, then launch.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Generation failed.";
@@ -88,10 +95,20 @@ export function CreateStudio() {
     }
   }
 
+  function onShot(dataUrl: string) {
+    if (imageCustom.current) return;
+    setImagePreview(dataUrl);
+    setImage(dataUrlToPngFile(dataUrl, `${(symbol || "ocg").toLowerCase()}.png`));
+  }
+
   async function launch() {
     if (!game) return;
     if (!wallet.publicKey) {
       setError("Connect a wallet to launch on Pump.fun.");
+      return;
+    }
+    if (!image) {
+      setError("Wait a moment for the cabinet screenshot, or upload a token image.");
       return;
     }
 
@@ -177,8 +194,8 @@ export function CreateStudio() {
         <div className="max-w-xl">
           <h1 className="text-3xl font-semibold tracking-tight">Create a game</h1>
           <p className="mt-2 text-muted-foreground">
-            Prompt a real micro-arcade. It plays in the cabinet, then you launch the Pump.fun
-            coin with the play URL in the token metadata.
+            Prompt a playable arcade. It fills the cabinet, then you launch the Pump.fun coin with
+            the play URL in the token metadata.
           </p>
         </div>
 
@@ -218,7 +235,7 @@ export function CreateStudio() {
               </button>
             </section>
 
-            <RomCabinet game={game} generating={generating} title={name || "Preview"} />
+            <RomCabinet game={game} generating={generating} title={name || "Preview"} onShot={onShot} />
 
             <AnimatePresence>
               {showLaunch ? (
@@ -268,15 +285,32 @@ export function CreateStudio() {
 
                   <div className="mt-4">
                     <Field label="Token image">
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/gif,image/webp"
-                        onChange={(event) => setImage(event.target.files?.[0] ?? null)}
-                        className="text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-foreground"
-                      />
+                      <div className="flex items-center gap-3">
+                        {imagePreview ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={imagePreview}
+                            alt="Token"
+                            className="size-16 rounded-xl border border-border object-cover"
+                          />
+                        ) : (
+                          <div className="size-16 rounded-xl border border-dashed border-border bg-background" />
+                        )}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/gif,image/webp"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0] ?? null;
+                            imageCustom.current = Boolean(file);
+                            setImage(file);
+                            setImagePreview(file ? URL.createObjectURL(file) : null);
+                          }}
+                          className="text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-foreground"
+                        />
+                      </div>
                     </Field>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Square PNG/JPG, ideally 1000×1000. Immutable after create.
+                      Auto-grabbed from the cabinet. Replace it if you want. Immutable after create.
                     </p>
                   </div>
 
@@ -310,13 +344,23 @@ export function CreateStudio() {
                     Socials can only be set at creation. Pump.fun website is set to the OCG play page.
                   </p>
 
-                  <label className="mt-5 flex items-start gap-3 rounded-xl border border-border bg-background/60 px-3 py-3">
-                    <input
-                      type="checkbox"
-                      checked={mayhemMode}
-                      onChange={(event) => setMayhemMode(event.target.checked)}
-                      className="mt-0.5"
-                    />
+                  <button
+                    type="button"
+                    onClick={() => setMayhemMode((value) => !value)}
+                    className="mt-5 flex w-full items-start gap-3 rounded-xl border border-border bg-background/60 px-3 py-3 text-left"
+                    aria-pressed={mayhemMode}
+                  >
+                    <span
+                      className={cn(
+                        "mt-0.5 grid size-5 shrink-0 place-items-center rounded-md border",
+                        mayhemMode
+                          ? "border-cyan bg-cyan text-[#041014]"
+                          : "border-border bg-background",
+                      )}
+                      aria-hidden
+                    >
+                      {mayhemMode ? <Check className="size-3.5 stroke-[3]" /> : null}
+                    </span>
                     <span>
                       <span className="block text-sm font-medium">Mayhem mode</span>
                       <span className="text-xs text-muted-foreground">
@@ -324,7 +368,7 @@ export function CreateStudio() {
                         market cap.
                       </span>
                     </span>
-                  </label>
+                  </button>
 
                   <div className="mt-5">
                     <div className="mb-2 flex items-center justify-between">

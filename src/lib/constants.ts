@@ -3,12 +3,12 @@ export const APP_TAGLINE = "OnChainGame";
 export const APP_DESCRIPTION =
   "Prompt a playable game, host it on OCG, and launch a Pump.fun token whose metadata points at the play URL.";
 
-/** Soft target for generated HTML. Games are hosted, not stuffed into a transaction. */
-export const TARGET_RAW_BYTES = 40000;
+/** Soft target for generated HTML. Games are hosted, so use the room. */
+export const TARGET_RAW_BYTES = 55000;
 
 export const OPENROUTER_MODEL_DEFAULT = "qwen/qwen3-coder-next";
-/** HTML ROM coder — cheap coding model, stronger at JS than Gemini Flash. */
-export const OPENROUTER_CODE_MODEL_DEFAULT = "qwen/qwen3-coder";
+/** HTML game coder — same long-context cheap model as planning. */
+export const OPENROUTER_CODE_MODEL_DEFAULT = "qwen/qwen3-coder-next";
 export const OPENROUTER_FALLBACK_MODEL = "google/gemini-2.5-flash";
 
 export const PUMP_FUN_COIN_URL = "https://pump.fun/coin";

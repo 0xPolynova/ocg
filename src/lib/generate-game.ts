@@ -22,6 +22,7 @@ import {
   implementUserPrompt,
   planSystemPrompt,
   polishPrompt,
+  expandPrompt,
   wrongGamePrompt,
 } from "./game-prompt";
 import { extractHtml } from "./minify-game";
@@ -30,7 +31,7 @@ import type { GenerateGameResponse } from "./types";
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
-const CODE_TOKENS = 16000;
+const CODE_TOKENS = 24000;
 
 async function chat(
   apiKey: string,
@@ -38,31 +39,46 @@ async function chat(
   messages: ChatMessage[],
   opts?: { temperature?: number; maxTokens?: number },
 ): Promise<string> {
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://launchocg.com",
-      "X-Title": "OCG OnChainGame",
-    },
-    body: JSON.stringify({
-      model,
-      temperature: opts?.temperature ?? 0.5,
-      max_tokens: opts?.maxTokens ?? CODE_TOKENS,
-      messages,
-    }),
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`OpenRouter ${response.status}: ${text.slice(0, 280)}`);
+  const maxTokens = opts?.maxTokens ?? CODE_TOKENS;
+  const thread: ChatMessage[] = [...messages];
+  let combined = "";
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://launchocg.com",
+        "X-Title": "OCG OnChainGame",
+      },
+      body: JSON.stringify({
+        model,
+        temperature: opts?.temperature ?? 0.5,
+        max_tokens: maxTokens,
+        messages: thread,
+      }),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`OpenRouter ${response.status}: ${text.slice(0, 280)}`);
+    }
+    const data = (await response.json()) as {
+      choices?: { finish_reason?: string; message?: { content?: string } }[];
+    };
+    const choice = data.choices?.[0];
+    const content = choice?.message?.content;
+    if (!content) throw new Error("OpenRouter returned an empty reply.");
+    combined += content;
+    if (choice.finish_reason !== "length") break;
+    thread.push({ role: "assistant", content });
+    thread.push({
+      role: "user",
+      content: "Continue the HTML document exactly where you stopped. No markdown. Do not restart.",
+    });
   }
-  const data = (await response.json()) as {
-    choices?: { message?: { content?: string } }[];
-  };
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("OpenRouter returned an empty reply.");
-  return content;
+
+  return combined;
 }
 
 async function withModelFallback(
@@ -200,6 +216,19 @@ export async function generateGameFromPrompt(prompt: string): Promise<{
           { role: "user", content: polishPrompt(plan, idea) },
         ],
         0.35,
+      );
+      html = made.html;
+      usedModel = made.model;
+    }
+
+    if (isThinRom(html) && /requestAnimationFrame/.test(html)) {
+      made = await writeRom(
+        [
+          { role: "system", content: implementSystemPrompt(plan, idea) },
+          { role: "assistant", content: html },
+          { role: "user", content: expandPrompt(plan, idea) },
+        ],
+        0.4,
       );
       html = made.html;
       usedModel = made.model;

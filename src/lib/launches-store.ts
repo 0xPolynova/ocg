@@ -65,9 +65,8 @@ export async function hydrateLaunches(): Promise<OcgLaunch[]> {
         if (!response.ok) return readLaunches();
         const remote = (await response.json()) as OcgLaunch[];
         if (!Array.isArray(remote)) return readLaunches();
-        const merged = mergeLaunches(remote, readLaunches());
-        writeLaunches(merged);
-        return merged;
+        writeLaunches(remote);
+        return remote;
       } catch {
         return readLaunches();
       }

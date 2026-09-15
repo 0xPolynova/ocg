@@ -6,7 +6,6 @@ import { PlayModal } from "@/components/play-modal";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { fetchLaunch, getEmptyLaunches, readLaunches, subscribeLaunches } from "@/lib/launches-store";
-import { SEED_LAUNCHES } from "@/lib/seed-games";
 import { launchSlug } from "@/lib/site";
 import type { OcgLaunch } from "@/lib/types";
 
@@ -36,9 +35,7 @@ export function PlayByKey({ lookup }: { lookup: string }) {
 
   const launch = useMemo(() => {
     return (
-      remote ??
-      [...local, ...SEED_LAUNCHES].find((item) => matchesLaunch(item, lookup)) ??
-      null
+      remote ?? local.find((item) => matchesLaunch(item, lookup)) ?? null
     );
   }, [local, lookup, remote]);
 

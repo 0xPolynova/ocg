@@ -415,7 +415,7 @@ export function followsTheme(html: string, plan: GamePlan, prompt: string): bool
 
 export function isThinRom(html: string): boolean {
   return (
-    html.length < 8000 ||
+    html.length < 18000 ||
     !/requestAnimationFrame/.test(html) ||
     !/fillText/.test(html) ||
     !/(game.?over|best)/i.test(html)

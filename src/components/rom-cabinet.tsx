@@ -18,10 +18,12 @@ export function RomCabinet({
   game,
   generating,
   title,
+  onShot,
 }: {
   game: GenerateGameResponse | null;
   generating: boolean;
   title: string;
+  onShot?: (dataUrl: string) => void;
 }) {
   const [line, setLine] = useState(0);
 
@@ -88,7 +90,7 @@ export function RomCabinet({
               exit={{ opacity: 0 }}
               className="absolute inset-0 overflow-hidden"
             >
-              <GameFrame html={game.html} title={title || "Preview"} />
+              <GameFrame html={game.html} title={title || "Preview"} onShot={onShot} />
             </motion.div>
           ) : (
             <motion.div

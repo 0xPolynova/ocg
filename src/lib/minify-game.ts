@@ -12,10 +12,9 @@ export function minifyGameHtml(input: string): string {
 
 export function extractHtml(text: string): string {
   const fenced = text.match(/```(?:html)?\s*([\s\S]*?)```/i);
-  if (fenced?.[1]) return minifyGameHtml(fenced[1]);
-  const doc = text.match(/<!doctype html[\s\S]*/i) ?? text.match(/<html[\s\S]*/i);
-  if (doc?.[0]) return minifyGameHtml(doc[0]);
-  return minifyGameHtml(text);
+  const raw = (fenced?.[1] ?? text).trim();
+  const doc = raw.match(/<!doctype html[\s\S]*/i) ?? raw.match(/<html[\s\S]*/i);
+  return (doc?.[0] ?? raw).trim();
 }
 
 export function inferGenre(prompt: string): "Arcade" | "Action" | "Puzzle" | "Reflex" | "Custom" {
