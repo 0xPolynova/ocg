@@ -38,11 +38,14 @@ export function decodePayload(data: Uint8Array): { mint: Uint8Array; compressed:
   return { mint, compressed };
 }
 
-export function splitChunks(payload: Uint8Array): Uint8Array[] {
-  if (payload.length <= CHUNK_DATA_BYTES) return [payload];
+export function splitChunks(
+  payload: Uint8Array,
+  chunkBytes: number = CHUNK_DATA_BYTES,
+): Uint8Array[] {
+  if (payload.length <= chunkBytes) return [payload];
   const chunks: Uint8Array[] = [];
-  for (let offset = 0; offset < payload.length; offset += CHUNK_DATA_BYTES) {
-    chunks.push(payload.slice(offset, offset + CHUNK_DATA_BYTES));
+  for (let offset = 0; offset < payload.length; offset += chunkBytes) {
+    chunks.push(payload.slice(offset, offset + chunkBytes));
   }
   return chunks;
 }
@@ -61,7 +64,7 @@ export function joinChunks(chunks: Uint8Array[]): Uint8Array {
 export function assertFitsOnChain(compressedBytes: number): void {
   if (compressedBytes > MAX_GAME_BYTES) {
     throw new Error(
-      `Game is ${compressedBytes} gzipped bytes. On-chain limit is ${MAX_GAME_BYTES} bytes.`,
+      `Game is ${compressedBytes} gzipped bytes. On-chain V1 limit is ${MAX_GAME_BYTES} gzipped bytes (4096-byte transaction).`,
     );
   }
 }

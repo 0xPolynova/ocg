@@ -94,7 +94,7 @@ export function CreateStudio() {
   async function launch() {
     if (!game) return;
     if (overLimit) {
-      setError("This ROM is too large to inscribe in a Solana transaction.");
+      setError("This ROM is too large to inscribe in a 4096-byte Solana V1 transaction.");
       return;
     }
     if (!wallet.publicKey) {
@@ -374,7 +374,7 @@ export function CreateStudio() {
             <dl className="mt-4 space-y-3 text-sm">
               <Summary label="Engine" value="Qwen3 Coder" />
               <Summary label="Mechanic" value={game?.mechanic ?? "—"} />
-              <Summary label="Inscribe at" value={`${MAX_GAME_BYTES} byte cap`} />
+              <Summary label="Inscribe at" value={`${MAX_GAME_BYTES} gzip · V1 4096 tx`} />
               <Summary label="ROM size" value={game ? `${game.compressedBytes} bytes` : "—"} />
               <Summary label="Ticker" value={symbol ? `$${symbol}` : "—"} />
               <Summary label="Supply" value="1B on Pump.fun curve" />

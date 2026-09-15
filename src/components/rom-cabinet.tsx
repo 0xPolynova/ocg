@@ -119,7 +119,7 @@ export function RomCabinet({
               {game.bytes} raw · {game.compressedBytes} gzipped · {game.mechanic ?? game.genre}
             </span>
             <span className={overLimit ? "text-negative" : "text-positive"}>
-              {meter}% of {MAX_GAME_BYTES} byte cap
+              {meter}% of {MAX_GAME_BYTES} gzip cap
             </span>
           </div>
           <div className="h-1 bg-muted">

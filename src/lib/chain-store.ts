@@ -1,13 +1,13 @@
 import { Buffer } from "buffer";
+import type { Adapter, SendTransactionOptions } from "@solana/wallet-adapter-base";
 import {
   Connection,
   PublicKey,
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
-import type { SendTransactionOptions } from "@solana/wallet-adapter-base";
 
-import { NOOP_PROGRAM_ID } from "@/lib/constants";
+import { LEGACY_CHUNK_DATA_BYTES, NOOP_PROGRAM_ID } from "@/lib/constants";
 import {
   assertFitsOnChain,
   compressGame,
@@ -17,9 +17,19 @@ import {
   joinChunks,
   splitChunks,
 } from "@/lib/game-codec";
+import {
+  isUserRejection,
+  serializeNoopMessageV1,
+  serializeUnsignedV1Transaction,
+  signV1Transaction,
+  v1WireSize,
+  V1_MAX_TX_BYTES,
+  walletSupportsV1,
+} from "@/lib/solana-tx-v1";
 
 type WalletSender = {
   publicKey: PublicKey | null;
+  wallet?: { adapter: Adapter } | null;
   sendTransaction: (
     transaction: Transaction,
     connection: Connection,
@@ -40,18 +50,93 @@ export function buildNoopInstruction(data: Uint8Array): TransactionInstruction {
   });
 }
 
-export async function inscribeGame(args: {
+function ixDataBytes(data: unknown): Uint8Array {
+  if (data instanceof Uint8Array) return data;
+  if (typeof Buffer !== "undefined" && Buffer.isBuffer(data)) return new Uint8Array(data);
+  if (typeof data === "string") return Uint8Array.from(Buffer.from(data, "base64"));
+  if (Array.isArray(data)) return Uint8Array.from(data as number[]);
+  return new Uint8Array();
+}
+
+async function simulateV1(connection: Connection, wire: Uint8Array): Promise<void> {
+  const response = await fetch(connection.rpcEndpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "simulateTransaction",
+      params: [
+        Buffer.from(wire).toString("base64"),
+        {
+          encoding: "base64",
+          sigVerify: false,
+          replaceRecentBlockhash: true,
+          commitment: "confirmed",
+        },
+      ],
+    }),
+  });
+  const json = (await response.json()) as {
+    error?: { message?: string };
+    result?: { value?: { err: unknown; logs?: string[] | null } };
+  };
+  if (json.error?.message) {
+    throw new Error(json.error.message);
+  }
+  const value = json.result?.value;
+  if (value?.err) {
+    const logs = value.logs?.slice(-6).join(" | ") ?? JSON.stringify(value.err);
+    throw new Error(`V1 simulation failed: ${logs}`);
+  }
+}
+
+async function inscribeGameV1(args: {
+  connection: Connection;
+  adapter: Adapter;
+  payer: PublicKey;
+  payload: Uint8Array;
+}): Promise<string> {
+  if (v1WireSize(args.payload.length) > V1_MAX_TX_BYTES) {
+    throw new Error("ROM does not fit in a 4096-byte Transaction V1.");
+  }
+
+  const { blockhash, lastValidBlockHeight } = await args.connection.getLatestBlockhash("confirmed");
+  const message = serializeNoopMessageV1({
+    payer: args.payer,
+    noopProgram: new PublicKey(NOOP_PROGRAM_ID),
+    recentBlockhash: blockhash,
+    instructionData: args.payload,
+  });
+  const unsigned = serializeUnsignedV1Transaction(message);
+  await simulateV1(args.connection, unsigned);
+
+  const signed = await signV1Transaction({
+    adapter: args.adapter,
+    transaction: unsigned,
+    chain: "solana:mainnet",
+  });
+
+  const signature = await args.connection.sendRawTransaction(signed, {
+    skipPreflight: false,
+    preflightCommitment: "confirmed",
+    maxRetries: 3,
+  });
+  await args.connection.confirmTransaction(
+    { signature, blockhash, lastValidBlockHeight },
+    "confirmed",
+  );
+  return signature;
+}
+
+async function inscribeGameLegacy(args: {
   connection: Connection;
   wallet: WalletSender;
-  mint: PublicKey;
-  html: string;
+  payload: Uint8Array;
 }): Promise<string[]> {
   if (!args.wallet.publicKey) throw new Error("Connect a wallet first.");
 
-  const compressed = compressGame(args.html);
-  assertFitsOnChain(compressed.byteLength);
-  const payload = encodePayload(mintBytes(args.mint), compressed);
-  const chunks = splitChunks(payload);
+  const chunks = splitChunks(args.payload, LEGACY_CHUNK_DATA_BYTES);
   const { blockhash, lastValidBlockHeight } =
     await args.connection.getLatestBlockhash("confirmed");
 
@@ -91,6 +176,42 @@ export async function inscribeGame(args: {
   return signatures;
 }
 
+export async function inscribeGame(args: {
+  connection: Connection;
+  wallet: WalletSender;
+  mint: PublicKey;
+  html: string;
+}): Promise<string[]> {
+  if (!args.wallet.publicKey) throw new Error("Connect a wallet first.");
+
+  const compressed = compressGame(args.html);
+  assertFitsOnChain(compressed.byteLength);
+  const payload = encodePayload(mintBytes(args.mint), compressed);
+  const adapter = args.wallet.wallet?.adapter;
+  const tryV1 = walletSupportsV1(adapter) && v1WireSize(payload.length) <= V1_MAX_TX_BYTES;
+
+  if (tryV1 && adapter) {
+    try {
+      const signature = await inscribeGameV1({
+        connection: args.connection,
+        adapter,
+        payer: args.wallet.publicKey,
+        payload,
+      });
+      return [signature];
+    } catch (err) {
+      if (isUserRejection(err)) throw err;
+      console.warn("Transaction V1 inscription failed, falling back to legacy chunks.", err);
+    }
+  }
+
+  return inscribeGameLegacy({
+    connection: args.connection,
+    wallet: args.wallet,
+    payload,
+  });
+}
+
 export async function loadGameFromChain(
   connection: Connection,
   signatures: string[],
@@ -115,12 +236,7 @@ export async function loadGameFromChain(
     for (const ix of instructions) {
       const programId = accountKeys[ix.programIdIndex];
       if (!programId?.equals(noop)) continue;
-      const { data } = ix;
-      chunks.push(
-        typeof data === "string"
-          ? Uint8Array.from(Buffer.from(data, "base64"))
-          : Uint8Array.from(data),
-      );
+      chunks.push(ixDataBytes(ix.data));
     }
   }
 
