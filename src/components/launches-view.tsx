@@ -19,6 +19,24 @@ export function LaunchesView() {
   const [playing, setPlaying] = useState<OcgLaunch | null>(null);
   const mintKey = stored.map((item) => item.mint ?? "").join("|");
 
+  async function applyStats(mint: string, coin: Awaited<ReturnType<typeof fetchPumpStats>>) {
+    if (!coin) return;
+    setStats((prev) => ({
+      ...prev,
+      [mint]: {
+        marketCapUsd: coin.usd_market_cap ?? coin.market_cap,
+        volumeUsd: coin.volume_24h,
+        change24h: coin.price_change_24h,
+      },
+    }));
+  }
+
+  async function refreshLaunch(launch: OcgLaunch) {
+    if (!launch.mint) return;
+    const coin = await fetchPumpStats(launch.mint);
+    await applyStats(launch.mint, coin);
+  }
+
   useEffect(() => {
     void hydrateLaunches();
   }, []);
@@ -96,7 +114,12 @@ export function LaunchesView() {
             </p>
           ) : (
             launches.map((launch) => (
-              <LaunchCard key={launch.id} launch={launch} onPlay={setPlaying} />
+              <LaunchCard
+                key={launch.id}
+                launch={launch}
+                onPlay={setPlaying}
+                onRefresh={refreshLaunch}
+              />
             ))
           )}
         </div>

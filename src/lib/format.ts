@@ -27,6 +27,26 @@ export function ticker(symbol: string): string {
   return symbol.startsWith("$") ? symbol : `$${symbol}`;
 }
 
+export function sparklinePoints(
+  values: number[],
+  width: number,
+  height: number,
+): { line: string; area: string } {
+  if (values.length === 0) return { line: "", area: "" };
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const pts = values.map((value, index) => {
+    const x = (index / Math.max(values.length - 1, 1)) * width;
+    const y = 1 + (1 - (value - min) / span) * (height - 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  return {
+    line: pts.join(" "),
+    area: `${pts.join(" ")} ${width},${height} 0,${height}`,
+  };
+}
+
 export function sparklinePath(values: number[], width: number, height: number): string {
   if (values.length === 0) return "";
   const min = Math.min(...values);
