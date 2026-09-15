@@ -23,7 +23,7 @@ export function PlayModal({
         onClick={onClose}
       />
       <div className="relative grid w-full max-w-5xl overflow-hidden rounded-3xl border border-border bg-card shadow-2xl md:grid-cols-[1.4fr_0.8fr]">
-        <div className="aspect-[4/3] bg-black md:aspect-auto md:min-h-[480px]">
+        <div className="relative aspect-[16/10] w-full bg-[#041014]">
           <GameFrame html={launch.gameHtml} title={launch.name} />
         </div>
         <div className="flex flex-col gap-4 p-5">

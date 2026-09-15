@@ -42,6 +42,7 @@ ${MECHANIC_RECIPES[plan.mechanic]}
 
 CODE SHAPE (required)
 <canvas id=c></canvas> then a script. 2d context lives in ctx. Never store ctx in x,y,w,h,p,s,t,e,n.
+VIEWPORT: the cabinet scales this canvas to fill a 16:10 box. Every frame read W=cv.width, H=cv.height (or innerWidth/innerHeight). NEVER hardcode 320/400/640. fillRect(0,0,W,H) the whole world. Positions and collisions must use W/H so the game fills the cabinet.
 let mode=0; // 0 title, 1 play, 2 over
 let score=0,best=0;
 function reset(){ /* rebuild world, score=0, mode=1 */ }

@@ -1,18 +1,37 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { wrapGameHtml } from "@/lib/wrap-game";
 
 export function GameFrame({ html, title }: { html: string; title: string }) {
+  const host = useRef<HTMLDivElement>(null);
+  const [ready, setReady] = useState(false);
   const srcDoc = useMemo(() => wrapGameHtml(html), [html]);
 
+  useEffect(() => {
+    const el = host.current;
+    if (!el) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width >= 120 && rect.height >= 80) setReady(true);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <iframe
-      title={title}
-      sandbox="allow-scripts"
-      srcDoc={srcDoc}
-      className="h-full w-full rounded-[inherit] border-0 bg-black"
-    />
+    <div ref={host} className="absolute inset-0 min-h-0 min-w-0 overflow-hidden bg-[#041014]">
+      {ready ? (
+        <iframe
+          title={title}
+          sandbox="allow-scripts"
+          srcDoc={srcDoc}
+          className="absolute inset-0 block h-full w-full border-0 bg-[#041014]"
+        />
+      ) : null}
+    </div>
   );
 }
