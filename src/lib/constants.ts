@@ -6,9 +6,9 @@ export const APP_DESCRIPTION =
 /** Soft target for generated HTML. One model pass, not a novella. */
 export const TARGET_RAW_BYTES = 14000;
 
-export const OPENROUTER_MODEL_DEFAULT = "qwen/qwen3-coder-next";
-/** HTML game coder — same long-context cheap model as planning. */
-export const OPENROUTER_CODE_MODEL_DEFAULT = "qwen/qwen3-coder-next";
+export const OPENROUTER_MODEL_DEFAULT = "qwen/qwen3-coder";
+/** HTML game coder — full Qwen3 Coder, still cheap vs frontier models. */
+export const OPENROUTER_CODE_MODEL_DEFAULT = "qwen/qwen3-coder";
 export const OPENROUTER_FALLBACK_MODEL = "google/gemini-2.5-flash";
 
 export const PUMP_FUN_COIN_URL = "https://pump.fun/coin";

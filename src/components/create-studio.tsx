@@ -3,10 +3,11 @@
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Keypair } from "@solana/web3.js";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Info, Lock, Sparkles, Wand2 } from "lucide-react";
+import { Check, Info, Lock, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 
+import { GamePromptChat, type StudioChatMessage } from "@/components/game-prompt-chat";
 import { RomCabinet } from "@/components/rom-cabinet";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -31,9 +32,8 @@ export function CreateStudio() {
   const wallet = useWallet();
   const router = useRouter();
 
-  const [prompt, setPrompt] = useState(
-    "Neon snake in a shrinking box — eat bits, don't hit the tail",
-  );
+  const [messages, setMessages] = useState<StudioChatMessage[]>([]);
+  const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState<"generate" | "launch" | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,37 +52,68 @@ export function CreateStudio() {
   const [solBuy, setSolBuy] = useState(0);
 
   const generating = busy === "generate";
-  const showLaunch = Boolean(game) && !generating;
+  const showLaunch = Boolean(game);
+  const originalPrompt = messages.find((item) => item.role === "user")?.content ?? "";
+  const requestId = useRef(0);
   const pct = useMemo(() => supplyPctForSol(solBuy), [solBuy]);
   const sliderValue = buyMode === "sol" ? solBuy : pct;
   const sliderMax = buyMode === "sol" ? PUMP_MAX_SOL_BUY : PUMP_MAX_CURVE_PCT;
   const sliderStep = buyMode === "sol" ? 0.01 : 0.1;
 
-  async function generate() {
+  async function send(text: string) {
+    const trimmed = text.trim();
+    if (busy !== null || trimmed.length < 3) return;
+    const id = ++requestId.current;
+    const userMessage: StudioChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: trimmed,
+    };
+    const history = [...messages, userMessage];
+    setMessages(history);
+    setDraft("");
     setBusy("generate");
     setError(null);
     setStatus(null);
-    setGame(null);
-    setName("");
-    setSymbol("");
     try {
       const response = await fetch(apiUrl("/api/generate-game"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({
+          prompt: trimmed,
+          messages: history.map(({ role, content }) => ({ role, content })),
+          html: game?.html,
+          name,
+          symbol,
+          mechanic: game?.mechanic,
+        }),
       });
       const json = (await response.json()) as GenerateGameResponse & { error?: string };
+      if (id !== requestId.current) return;
       if (!response.ok && !json.html) throw new Error(json.error ?? "Could not generate a game.");
-      setGame(json);
-      setName(json.name);
-      setSymbol(json.symbol);
-      setDescription(prompt.slice(0, 200));
-      setWebsite("");
-      setImage(null);
-      setImagePreview(null);
-      imageCustom.current = false;
-      setStatus(json.fallback ? json.error ?? "Used a compact fallback ROM." : "Game ready. Play it, then launch.");
+      const reply =
+        json.reply?.trim() ||
+        (game ? "Updated. Play it above." : "Game ready. Play it, then launch.");
+      setMessages((current) => {
+        const last = current[current.length - 1];
+        if (last?.role === "assistant" && last.content === reply) return current;
+        return [...current, { id: crypto.randomUUID(), role: "assistant", content: reply }];
+      });
+      if (json.html) {
+        setGame(json);
+        if (!game) {
+          setName(json.name);
+          setSymbol(json.symbol);
+          setDescription(trimmed.slice(0, 200));
+          setWebsite("");
+          setImage(null);
+          setImagePreview(null);
+          imageCustom.current = false;
+        }
+      }
+      setStatus(json.fallback ? json.error ?? "Used a compact fallback ROM." : reply);
     } catch (err) {
+      if (id !== requestId.current) return;
       const message = err instanceof Error ? err.message : "Generation failed.";
       setError(
         message === "Failed to fetch"
@@ -90,7 +121,7 @@ export function CreateStudio() {
           : message,
       );
     } finally {
-      setBusy(null);
+      if (id === requestId.current) setBusy(null);
     }
   }
 
@@ -124,7 +155,7 @@ export function CreateStudio() {
         name,
         symbol,
         description: [
-          description || `OCG · ${prompt.slice(0, 160)}`,
+          description || `OCG · ${originalPrompt.slice(0, 160)}`,
           website.trim() ? `Project: ${website.trim()}` : "",
         ]
           .filter(Boolean)
@@ -151,8 +182,8 @@ export function CreateStudio() {
         id: created.mint.toBase58(),
         name,
         symbol,
-        description: description || prompt,
-        prompt,
+        description: description || originalPrompt,
+        prompt: originalPrompt,
         genre: game.genre,
         gameHtml: game.html,
         gameBytes: utf8Bytes(game.html),
@@ -197,62 +228,26 @@ export function CreateStudio() {
           </p>
         </div>
 
-        <div className="mt-8 grid items-start gap-5 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="space-y-5">
-            <AnimatePresence>
-              {generating || game ? (
-                <motion.div
-                  key="cabinet"
-                  initial={{ opacity: 0, y: 18 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  <RomCabinet
-                    game={game}
-                    generating={generating}
-                    title={name || "Preview"}
-                    onShot={onShot}
-                  />
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
+        <div className="mt-8 space-y-5">
+          <RomCabinet
+            game={game}
+            generating={generating}
+            title={name || "Preview"}
+            onShot={onShot}
+          />
 
-            <section className="rounded-2xl border border-border bg-card p-5 md:p-6">
-              <Field label="Prompt">
-                <textarea
-                  value={prompt}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  rows={4}
-                  className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary/50"
-                  placeholder="A microscopic snake game with neon walls"
-                />
-              </Field>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {PROMPTS.map((idea) => (
-                  <button
-                    key={idea.label}
-                    type="button"
-                    onClick={() => setPrompt(idea.prompt)}
-                    className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                  >
-                    {idea.label}
-                  </button>
-                ))}
-              </div>
+          <div className="grid items-start gap-5 lg:grid-cols-[1.15fr_0.85fr]">
+            <div className="space-y-5">
+              <GamePromptChat
+                messages={messages}
+                draft={draft}
+                onDraftChange={setDraft}
+                onSend={(text) => void send(text)}
+                thinking={generating}
+                disabled={busy === "launch"}
+              />
 
-              <button
-                type="button"
-                onClick={() => void generate()}
-                disabled={busy !== null || prompt.trim().length < 3}
-                className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-secondary px-4 text-sm font-medium hover:bg-secondary/80 disabled:opacity-50"
-              >
-                <Wand2 className="size-4" />
-                {generating ? "Building game…" : game ? "Regenerate" : "Generate game"}
-              </button>
-            </section>
-
-            <AnimatePresence>
+              <AnimatePresence>
               {showLaunch ? (
                 <motion.section
                   key="launch-form"
@@ -482,43 +477,13 @@ export function CreateStudio() {
             {status && !generating ? <p className="mt-3 text-xs text-positive">{status}</p> : null}
             {error ? <p className="mt-3 text-xs text-negative">{error}</p> : null}
           </aside>
+          </div>
         </div>
       </main>
       <SiteFooter />
     </div>
   );
 }
-
-const PROMPTS = [
-  {
-    label: "Orbit Cat",
-    prompt: "A one-button dodge game where a cat weaves through falling moons",
-  },
-  {
-    label: "Neon Snake",
-    prompt: "Neon snake in a shrinking box — eat bits, don't hit the tail",
-  },
-  {
-    label: "Asteroids",
-    prompt: "Tiny spaceship blasting incoming asteroids, one-tap fire",
-  },
-  {
-    label: "Toxic Frog",
-    prompt: "Frog hopping logs across a toxic canal, miss and splash",
-  },
-  {
-    label: "Pipe Bird",
-    prompt: "Flappy bird through neon pipes, tap to flap, don't clip the gap",
-  },
-  {
-    label: "Memory Pulse",
-    prompt: "Simon-style memory game: repeat the glowing pad sequence",
-  },
-  {
-    label: "DOOM",
-    prompt: "Doom — first person corridors, shotgun, demons",
-  },
-];
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

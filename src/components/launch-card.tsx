@@ -1,10 +1,10 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useState } from "react";
 import { Check, Copy, Play, RefreshCw, Share2 } from "lucide-react";
 
 import { GENRES, PUMP_FUN_COIN_URL } from "@/lib/constants";
-import { formatPct, formatUsd, hashHue, sparklinePoints, ticker } from "@/lib/format";
+import { formatPct, formatUsd, hashHue, ticker } from "@/lib/format";
 import { publicPlayUrl, launchSlug } from "@/lib/site";
 import type { OcgLaunch } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -53,8 +53,6 @@ export function LaunchCard({
 }) {
   const hue = hashHue(launch.symbol + launch.name);
   const up = (launch.change24h ?? 0) >= 0;
-  const spark = sparklinePoints(launch.sparkline, 100, 32);
-  const fillId = useId();
   const [copied, setCopied] = useState<"share" | "ca" | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -171,27 +169,6 @@ export function LaunchCard({
         <span>Vol {launch.volumeUsd ? formatUsd(launch.volumeUsd) : "—"}</span>
         {launch.change24h !== undefined ? (
           <span className={up ? "text-positive" : "text-negative"}>{formatPct(launch.change24h)}</span>
-        ) : null}
-        {spark.line ? (
-          <svg viewBox="0 0 100 32" preserveAspectRatio="none" className="ml-auto h-6 w-20 shrink-0" aria-hidden>
-            <defs>
-              <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="currentColor" stopOpacity="0.14" />
-                <stop offset="1" stopColor="currentColor" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <g className={up ? "text-positive" : "text-negative"}>
-              <polygon points={spark.area} fill={`url(#${fillId})`} />
-              <polyline
-                points={spark.line}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </g>
-          </svg>
         ) : null}
       </div>
 

@@ -5,7 +5,7 @@ import multer from "multer";
 
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 
-import { generateGameFromPrompt } from "../src/lib/generate-game";
+import { generateGameFromChat } from "../src/lib/generate-game";
 import { buildMintSignedPumpCreateTx } from "../src/lib/pump-create-tx";
 import { HELIUS_RPC_HTTP } from "../src/lib/solana-rpc";
 import type { PumpCoinStats } from "../src/lib/types";
@@ -100,7 +100,12 @@ app.post("/api/launches", async (req, res) => {
 
 app.post("/api/generate-game", async (req, res) => {
   const prompt = typeof req.body?.prompt === "string" ? req.body.prompt : "";
-  const result = await generateGameFromPrompt(prompt);
+  const messages = Array.isArray(req.body?.messages) ? req.body.messages : undefined;
+  const html = typeof req.body?.html === "string" ? req.body.html : undefined;
+  const name = typeof req.body?.name === "string" ? req.body.name : undefined;
+  const symbol = typeof req.body?.symbol === "string" ? req.body.symbol : undefined;
+  const mechanic = typeof req.body?.mechanic === "string" ? req.body.mechanic : undefined;
+  const result = await generateGameFromChat({ prompt, messages, html, name, symbol, mechanic });
   res.status(result.status).json(result.body);
 });
 

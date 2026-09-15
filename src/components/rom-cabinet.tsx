@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { GameFrame } from "@/components/game-frame";
 import type { GenerateGameResponse } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 const LOADING_LINES = [
   "Writing the design…",
@@ -42,15 +43,15 @@ export function RomCabinet({
     <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <p className="text-sm font-medium">
-          {generating ? "Building game" : title || "Preview"}
+          {generating ? (game ? "Updating game" : "Building game") : title || "Preview"}
         </p>
         <p className="text-xs text-muted-foreground">
-          {generating ? "Working" : "Ready to play"}
+          {generating ? "Working" : game ? "Ready to play" : "Waiting for a prompt"}
         </p>
       </div>
-      <div className="relative aspect-[16/10] bg-background">
+      <div className="relative h-[min(62vh,640px)] min-h-[380px] bg-background">
         <AnimatePresence mode="wait">
-          {generating ? (
+          {generating && !game ? (
             <motion.div
               key="loading"
               initial={{ opacity: 0 }}
@@ -84,15 +85,35 @@ export function RomCabinet({
             </motion.div>
           ) : game ? (
             <motion.div
-              key="play"
+              key={game.html.slice(0, 48)}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 overflow-hidden"
             >
               <GameFrame html={game.html} title={title || "Preview"} onShot={onShot} />
+              {generating ? (
+                <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-center gap-2 bg-background/70 py-2 text-xs text-foreground backdrop-blur-sm">
+                  <motion.span
+                    className="size-3 rounded-full border border-border border-t-primary"
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 0.9, ease: "linear" }}
+                  />
+                  Applying your change…
+                </div>
+              ) : null}
             </motion.div>
-          ) : null}
+          ) : (
+            <motion.div
+              key="idle"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground"
+            >
+              <p>Describe a game in the chat below.</p>
+              <p className="text-xs">The playable build shows up here.</p>
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
       {game && !generating ? (
@@ -100,7 +121,9 @@ export function RomCabinet({
           <span className="truncate">
             {game.bytes.toLocaleString()} bytes · {game.mechanic ?? game.genre}
           </span>
-          <span className="text-positive">Play page</span>
+          <span className={cn(game.fallback ? "text-muted-foreground" : "text-positive")}>
+            {game.fallback ? "Fallback ROM" : "Play page"}
+          </span>
         </div>
       ) : null}
     </div>

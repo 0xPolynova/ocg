@@ -7,21 +7,29 @@ import { compressGame, utf8Bytes } from "./game-codec";
 import {
   famousGame,
   genreFromMechanic,
+  MECHANICS,
   normalizeIdea,
   parsePlan,
   pickMechanic,
   tickerFromPlan,
   type GamePlan,
+  type Mechanic,
 } from "./game-plan";
-import { implementSystemPrompt, implementUserPrompt, planSystemPrompt } from "./game-prompt";
+import {
+  implementSystemPrompt,
+  implementUserPrompt,
+  planSystemPrompt,
+  reviseSystemPrompt,
+  reviseUserPrompt,
+} from "./game-prompt";
 import { extractHtml } from "./minify-game";
 import { extractGameScript } from "./wrap-game";
 import { fallbackGame } from "./seed-games";
-import type { GenerateGameResponse } from "./types";
+import type { GenerateGameRequest, GenerateGameResponse } from "./types";
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
-const CODE_TOKENS = 10000;
+const CODE_TOKENS = 12000;
 
 async function chat(
   apiKey: string,
@@ -92,6 +100,7 @@ function pack(
   html: string,
   plan: GamePlan,
   model: string,
+  reply: string,
   fallback = false,
   error?: string,
 ): GenerateGameResponse {
@@ -105,16 +114,51 @@ function pack(
     bytes: utf8Bytes(html),
     compressedBytes: compressGame(html).byteLength,
     model: fallback ? "ocg-fallback" : model,
+    reply,
     fallback,
     error,
   };
+}
+
+function asMechanic(value: string | undefined, fallback: Mechanic): Mechanic {
+  return value && (MECHANICS as readonly string[]).includes(value) ? (value as Mechanic) : fallback;
+}
+
+function lastUserText(messages: { role: string; content: string }[], fallback: string): string {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const item = messages[i];
+    if (item?.role === "user" && item.content.trim()) return item.content.trim();
+  }
+  return fallback.trim();
+}
+
+function chatTranscript(messages: { role: string; content: string }[]): string {
+  return messages
+    .filter((item) => item.content.trim() && item.role !== "system")
+    .slice(-12)
+    .map((item) => `${item.role === "user" ? "Player" : "OCG"}: ${item.content.trim()}`)
+    .join("\n");
+}
+
+function replyFor(revision: boolean, name: string, request: string): string {
+  if (!revision) return `Built ${name}. Play it above, or tell me what to change.`;
+  const clipped = request.replace(/\s+/g, " ").slice(0, 72);
+  return clipped ? `Updated — ${clipped}${request.length > 72 ? "…" : ""}.` : "Updated. Play it above.";
 }
 
 export async function generateGameFromPrompt(prompt: string): Promise<{
   status: number;
   body: GenerateGameResponse | { error: string };
 }> {
-  const trimmed = prompt.trim();
+  return generateGameFromChat({ prompt });
+}
+
+export async function generateGameFromChat(input: GenerateGameRequest): Promise<{
+  status: number;
+  body: GenerateGameResponse | { error: string };
+}> {
+  const messages = Array.isArray(input.messages) ? input.messages : [];
+  const trimmed = lastUserText(messages, input.prompt ?? "");
   if (trimmed.length < 3) {
     return { status: 400, body: { error: "Describe the game in a bit more detail." } };
   }
@@ -122,14 +166,21 @@ export async function generateGameFromPrompt(prompt: string): Promise<{
   const apiKey = process.env.OPENROUTER_API_KEY;
   const planModel = process.env.OPENROUTER_MODEL ?? OPENROUTER_MODEL_DEFAULT;
   const codeModel = process.env.OPENROUTER_CODE_MODEL ?? OPENROUTER_CODE_MODEL_DEFAULT;
-  const idea = normalizeIdea(trimmed);
+  const idea = normalizeIdea(messages.find((item) => item.role === "user")?.content.trim() || trimmed);
   const hinted = pickMechanic(idea);
   const localPlan: GamePlan = parsePlan("{}", idea);
-  localPlan.mechanic = hinted;
+  localPlan.mechanic = asMechanic(input.mechanic, hinted);
+  const revising = Boolean(input.html && /<canvas/i.test(input.html));
 
   if (!apiKey) {
     const demo = fallbackGame(trimmed);
-    const result = pack(demo.html, { ...localPlan, title: demo.name.toUpperCase() }, "ocg-fallback", true);
+    const result = pack(
+      demo.html,
+      { ...localPlan, title: demo.name.toUpperCase() },
+      "ocg-fallback",
+      replyFor(revising, demo.name, trimmed),
+      true,
+    );
     result.name = demo.name;
     result.symbol = demo.symbol;
     result.error = "Missing OPENROUTER_API_KEY — used a local arcade fallback.";
@@ -139,7 +190,12 @@ export async function generateGameFromPrompt(prompt: string): Promise<{
   try {
     const known = famousGame(idea);
     let plan: GamePlan;
-    if (known || hinted !== "custom") {
+    if (revising) {
+      plan = parsePlan("{}", idea);
+      if (input.mechanic) plan.mechanic = asMechanic(input.mechanic, plan.mechanic);
+      else if (hinted !== "custom") plan.mechanic = hinted;
+      if (input.name) plan.title = input.name.toUpperCase();
+    } else if (known || hinted !== "custom") {
       plan = parsePlan("{}", idea);
       if (hinted !== "custom") plan.mechanic = hinted;
     } else {
@@ -159,21 +215,36 @@ export async function generateGameFromPrompt(prompt: string): Promise<{
       plan = parsePlan(planned.text, idea);
     }
 
-    const made = await withModelFallback(
-      apiKey,
-      codeModel,
-      OPENROUTER_FALLBACK_MODEL,
-      [
-        { role: "system", content: implementSystemPrompt(plan, idea) },
-        { role: "user", content: implementUserPrompt(plan, idea) },
-      ],
-      { temperature: 0.45, maxTokens: CODE_TOKENS },
-    );
+    const made = revising
+      ? await withModelFallback(
+          apiKey,
+          codeModel,
+          OPENROUTER_FALLBACK_MODEL,
+          [
+            { role: "system", content: reviseSystemPrompt(plan, idea) },
+            {
+              role: "user",
+              content: `Chat so far:\n${chatTranscript(messages)}\n\n${reviseUserPrompt(trimmed, input.html ?? "")}`,
+            },
+          ],
+          { temperature: 0.4, maxTokens: CODE_TOKENS },
+        )
+      : await withModelFallback(
+          apiKey,
+          codeModel,
+          OPENROUTER_FALLBACK_MODEL,
+          [
+            { role: "system", content: implementSystemPrompt(plan, idea) },
+            { role: "user", content: implementUserPrompt(plan, idea) },
+          ],
+          { temperature: 0.45, maxTokens: CODE_TOKENS },
+        );
+
     const html = extractHtml(made.text);
     const scriptChars = extractGameScript(html).length;
     console.log(
       JSON.stringify({
-        event: "generate-game",
+        event: revising ? "revise-game" : "generate-game",
         model: made.model,
         mechanic: plan.mechanic,
         bytes: utf8Bytes(html),
@@ -184,11 +255,19 @@ export async function generateGameFromPrompt(prompt: string): Promise<{
     );
 
     if (!/requestAnimationFrame/.test(html) || scriptChars < 80) {
+      if (revising && input.html) {
+        const result = pack(input.html, plan, made.model, "Could not apply that change — the last playable build is still up.", true);
+        if (input.name) result.name = input.name;
+        if (input.symbol) result.symbol = input.symbol;
+        result.error = "Revision had no game loop.";
+        return { status: 200, body: result };
+      }
       const demo = fallbackGame(trimmed);
       const result = pack(
         demo.html,
         { ...plan, title: demo.name.toUpperCase() },
         made.model,
+        replyFor(false, demo.name, trimmed),
         true,
         "Model game had no loop — used a compact fallback.",
       );
@@ -197,13 +276,30 @@ export async function generateGameFromPrompt(prompt: string): Promise<{
       return { status: 200, body: result };
     }
 
-    return { status: 200, body: pack(html, plan, made.model) };
+    const packed = pack(html, plan, made.model, replyFor(revising, tickerFromPlan(plan).name, trimmed));
+    if (revising && input.name) packed.name = input.name;
+    if (revising && input.symbol) packed.symbol = input.symbol;
+    return { status: 200, body: packed };
   } catch (error) {
+    if (revising && input.html) {
+      const result = pack(
+        input.html,
+        localPlan,
+        "ocg-fallback",
+        "That change failed. The last playable build is still up — try again.",
+        true,
+        error instanceof Error ? error.message : "Game generation failed.",
+      );
+      if (input.name) result.name = input.name;
+      if (input.symbol) result.symbol = input.symbol;
+      return { status: 200, body: result };
+    }
     const demo = fallbackGame(trimmed);
     const result = pack(
       demo.html,
       { ...localPlan, title: demo.name.toUpperCase() },
       "ocg-fallback",
+      replyFor(false, demo.name, trimmed),
       true,
       error instanceof Error ? error.message : "Game generation failed.",
     );

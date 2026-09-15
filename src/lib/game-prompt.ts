@@ -77,6 +77,27 @@ export function implementUserPrompt(plan: GamePlan, idea: string): string {
   return `Ship the finished "${plan.title}" game now. Camera is ${plan.camera}. Mechanic is ${plan.mechanic}. Fantasy: ${plan.fantasy}. Output ONLY the HTML document for "${idea}".`;
 }
 
+export function reviseSystemPrompt(plan: GamePlan, idea: string): string {
+  return `You are iterating on an existing HTML5 canvas game with the player. Keep the same game unless they explicitly want a different one.
+
+PLAYER'S ORIGINAL IDEA: "${idea}"
+DESIGN: ${plan.title} · ${plan.mechanic} · ${plan.camera} · ${plan.fantasy}
+
+RULES
+- Output ONLY one complete HTML document. No markdown, no fences, no chat.
+- Apply the latest user request to the CURRENT GAME they already have. Do not start over unless they ask for a new game.
+- Keep title/play/game-over, viewport fill (innerWidth/innerHeight), juice, and the host aliases canvas/cv/c/ctx.
+- Palette: bg #041014, player #8fd4de, good #3ddc8e, bad #f07178, accent #f8d36a, text #e8fbff.
+- No external URLs, images, fonts, or libraries.
+
+Apply their change. Ship the full updated HTML.`;
+}
+
+export function reviseUserPrompt(request: string, html: string): string {
+  const clipped = html.length > 24000 ? `${html.slice(0, 24000)}\n<!-- truncated -->` : html;
+  return `CURRENT GAME HTML:\n${clipped}\n\nCHANGE REQUEST: ${request}\n\nOutput ONLY the full updated HTML document.`;
+}
+
 export function polishPrompt(plan: GamePlan, idea: string): string {
   return `This is still too small. Keep ${plan.mechanic} + title "${plan.title}" + camera ${plan.camera}, but DOUBLE the drawing code: better sprites for ${plan.player} and ${plan.hazards}, a full world, title/play/game-over, ramp, HUD, juice. Target ${TARGET_RAW_BYTES} characters. It must still be recognizably "${idea}". Output ONLY HTML.`;
 }

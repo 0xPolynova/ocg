@@ -34,8 +34,23 @@ export type GenerateGameResponse = {
   bytes: number;
   compressedBytes: number;
   model: string;
+  reply?: string;
   fallback?: boolean;
   error?: string;
+};
+
+export type GenerateGameChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type GenerateGameRequest = {
+  prompt?: string;
+  messages?: GenerateGameChatMessage[];
+  html?: string;
+  name?: string;
+  symbol?: string;
+  mechanic?: string;
 };
 
 export type PumpCoinStats = {
